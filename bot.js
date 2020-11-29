@@ -8,7 +8,6 @@ module.exports = class Bot {
   constructor(toScrape, praises, clientOptions, blacklistedUsers) {
 
     this.BOT_START = Date.now() / 1000;
-    this.MONTHS_TO_MAINTAIN = process.env.REDDIT_MONTHS_TO_MAINTAIN || 1;
     this.oldIds = [];
     this.toScrape = toScrape;
     this.praises = praises;
@@ -135,6 +134,11 @@ module.exports = class Bot {
     filteredSubmissions = filteredSubmissions.filter(submission => {
       let fiveDaysAgo = (Date.now() - 1000*60*60*24*5) / 1000; // created_utc is in seconds, not milliseconds
       return submission.created_utc >= fiveDaysAgo;
+    })
+
+    // don't include hidden, removed or locked submissions
+    filteredSubmissions = filteredSubmissions.filter(submission => {
+      return !submission.hidden && !submission.removed && !submission.locked;
     })
 
     // filter posts by blacklisted users
