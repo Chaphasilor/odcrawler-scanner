@@ -15,7 +15,7 @@ module.exports = class OpenDirectoryDownloader {
   scanUrl(url) {
     return new Promise((resolve, reject) => {
     
-      const oddProcess = spawn(this.executable, [`-u ${url}`, `--quit`, `--json`, `--upload-urls`]);
+      const oddProcess = spawn(this.executable, [`-u ${url}`, `--quit`, `--json`, `--upload-urls`, `--speedtest`]);
 
       let output = ``;
       let error = ``;
