@@ -26,15 +26,19 @@ module.exports.scanUrls = async function scanUrls(urls) {
   
 }
 
-module.exports.extractUrls = function extractUrls(submission) {
+module.exports.extractUrls = async function extractUrls(submission) {
 
-  if (!submission.is_self) {
 
-    return [submission.url];
+
+  if (!(await submission.is_self)) {
+
+    return [await submission.url];
     
   } else {
 
-    let matches = submission.selftext.match(urlRegexSafe({
+    let test = await (submission.selftext);
+    
+    let matches = test.match(urlRegexSafe({
       strict: true,
       exact: false,
       ipv4: true,

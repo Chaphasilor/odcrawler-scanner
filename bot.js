@@ -15,6 +15,7 @@ module.exports = class Bot {
     this.blacklistedUsers = blacklistedUsers;
     this.client = new Snoowrap(clientOptions);
     this.username = clientOptions.username;
+    this.subsToMonitor = Object.values(this.toScrape).reduce((allSubs, sorting) => [...allSubs, ...sorting], []);
     this.devLink = 'https://www.reddit.com/message/compose?to=Chaphasilor&subject=[DEV]';
     this.feedbackLink = 'https://www.reddit.com/message/compose?to=Chaphasilor&subject=[FEEDBACK]';
     this.running = {
@@ -25,7 +26,7 @@ module.exports = class Bot {
 
   }
 
-  startPolling({ submissionsIntervall, inboxIntervall, brokenLinksIntervall }) {
+  startPolling({ submissionsIntervall, inboxIntervall, mentionsIntervall }) {
 
     if (submissionsIntervall > 0) {
       this.pollSubmissions(submissionsIntervall);
@@ -33,8 +34,8 @@ module.exports = class Bot {
     if (inboxIntervall > 0) {
       this.pollInbox(inboxIntervall);
     }
-    if (brokenLinksIntervall > 0) {
-      this.pollMentions(brokenLinksIntervall);
+    if (mentionsIntervall > 0) {
+      this.pollMentions(mentionsIntervall);
     }
 
   }
@@ -81,6 +82,79 @@ module.exports = class Bot {
     }
   }
 
+  async loadSubmissions() {
+
+    let allSubmissions = [];
+    
+    for (let type of Object.keys(this.toScrape)) {
+
+      for (let subredditName of this.toScrape[type]) {
+        let subs;
+        let sub = await this.client.getSubreddit(subredditName);
+        switch (type) {
+          case 'new':
+            subs = await sub.getNew({ limit: 10 });
+            break;
+
+          case 'rising':
+            subs = await sub.getRising({ limit: 10 });
+            break;
+
+          case 'hot':
+            subs = await sub.getHot({ limit: 10 });
+            break;
+
+          default:
+            break;
+        }
+        // console.log(subs);
+        allSubmissions = allSubmissions.concat(subs);
+      }
+
+    }
+
+    return allSubmissions;
+    
+  }
+
+  filterSubmissions(submissions) {
+
+    // filter out all duplicates
+    let filteredSubmissionIds = [];
+
+    let filteredSubmissions = submissions.filter(submission => {
+      if (!filteredSubmissionIds.includes(submission.id)) {
+        filteredSubmissionIds.push(submission.id);
+        return true;
+      } else {
+        return false;
+      }
+    })
+
+    // only include submissions that are younger than 5 days
+    filteredSubmissions = filteredSubmissions.filter(submission => {
+      let fiveDaysAgo = (Date.now() - 1000*60*60*24*5) / 1000; // created_utc is in seconds, not milliseconds
+      return submission.created_utc >= fiveDaysAgo;
+    })
+
+    // filter posts by blacklisted users
+    filteredSubmissions = filteredSubmissions.filter(submission => {
+      return !this.blacklistedUsers.includes(submission.author.name);
+    })
+    
+    // only include new submissions (not dealt with by the bot)
+    filteredSubmissions = filteredSubmissions.filter(submission => {
+      return !this.oldIds.includes(submission.id);
+    })
+    // remember all new submissions
+    filteredSubmissions.forEach(submission => {
+      this.oldIds.push(submission.id);
+    })
+
+    return filteredSubmissions;
+    
+  }
+
   async alreadyCommentedComment(comment) {
     try {
       // comment.replies = await comment.replies.fetchAll();
@@ -117,6 +191,66 @@ I'm a bot, beep, boop!
 
   }
 
+  async scanAndComment(submission, comment) {
+
+    submission = await submission.fetch();
+    if (comment) {
+      comment = await comment.fetch();
+    }
+    
+    console.log(`scanning '${submission.title}' (https://reddit.com/${submission.id})`);
+
+    let odUrls = await extractUrls(submission);
+
+    console.log(`odUrls:`, odUrls);
+
+    let scanResults;
+
+    try {
+      
+      scanResults = await scanUrls(odUrls);
+
+    } catch (err) {
+      throw new Error(`error scanning OD: ${err.message}`)
+    }
+    
+    try {
+
+      let reply;
+      
+      if (scanResults.length === 0) {
+        reply = await submission.reply(`
+Sorry, I didn't manage to scan this OD :/
+        `);
+      } else {
+
+        if (comment) {
+          reply = await comment.reply(this.generateComment(scanResults, this.devLink, this.feedbackLink));
+          console.log(`replied to comment https://reddit.com/comments/${submission.id}/_/${comment.id}`);
+        } else {
+          reply = await submission.reply(this.generateComment(scanResults, this.devLink, this.feedbackLink));
+          console.log(`replied to '${submission.title}' (https://reddit.com/${submission.id})`);
+        }
+
+
+        // search the subreddit's mods for the bots user name
+        let sub = await this.client.getSubreddit(reply.subreddit.display_name);
+        let mod = await sub.getModerators({ name: this.username });
+
+        // approve reply if bot is a moderator with posts permission
+        if (mod.length > 0 && mod[0].mod_permissions.includes('posts')) {
+          await reply.approve();
+          console.log('approved comment');
+        }
+        
+      }
+
+    } catch (err) {
+      throw new Error(`error replying to https://reddit.com/${submission.id}: ${err}`);
+    }
+    
+  }
+
   async refreshSubmissions() {
 
     console.log('refreshing submissions...');
@@ -125,115 +259,24 @@ I'm a bot, beep, boop!
     let count = 0;
 
     try {
-      let allSubmissions = [];
 
-      for (let type of Object.keys(this.toScrape)) {
+      let allSubmissions = await this.loadSubmissions();
 
-        for (let subredditName of this.toScrape[type]) {
-          let subs;
-          let sub = await this.client.getSubreddit(subredditName);
-          switch (type) {
-            case 'new':
-              subs = await sub.getNew({ limit: 10 });
-              break;
+      let filteredSubmissions = this.filterSubmissions(allSubmissions);
 
-            case 'rising':
-              subs = await sub.getRising({ limit: 10 });
-              break;
+      console.log(`filteredSubmissions.length:`, filteredSubmissions.length);
 
-            case 'hot':
-              subs = await sub.getHot({ limit: 10 });
-              break;
-
-            default:
-              break;
-          }
-          // console.log(subs);
-          allSubmissions = allSubmissions.concat(subs);
-        }
-
-      }
-
-      // console.log(allSubmissions);
-
-      // filter out all duplicates
-      let filteredSubmissionIds = [];
-
-      allSubmissions = allSubmissions.filter(submission => {
-        if (!filteredSubmissionIds.includes(submission.id)) {
-          filteredSubmissionIds.push(submission.id);
-          return true;
-        } else {
-          return false;
-        }
-      })
-
-      // only include submissions that are younger than 5 days
-      allSubmissions = allSubmissions.filter(submission => {
-        let fiveDaysAgo = (Date.now() - 1000*60*60*24*5) / 1000; // created_utc is in seconds, not milliseconds
-        return submission.created_utc >= fiveDaysAgo;
-      })
-
-      // filter posts by blacklisted users
-      allSubmissions = allSubmissions.filter(submission => {
-        return !this.blacklistedUsers.includes(submission.author.name);
-      })
-      
-      // only include new submissions (not dealt with by the bot)
-      allSubmissions = allSubmissions.filter(submission => {
-        return !this.oldIds.includes(submission.id);
-      })
-      // remember all new submissions
-      allSubmissions.forEach(submission => {
-        this.oldIds.push(submission.id);
-      })
-
-      console.log(`allSubmissions.length:`, allSubmissions.length);
-      
-      console.log(`allSubmissions.length:`, allSubmissions.length);
-
-      for (let submission of allSubmissions) {
+      for (let submission of filteredSubmissions) {
 
         if (!(await this.alreadyCommentedSubmission(submission))) {
 
-          console.log(`replying to '${submission.title}' (https://reddit.com/${submission.id})`);
-
-          let odUrls = extractUrls(submission);
-
-          console.log(`odUrls:`, odUrls);
-
-          let scanResults;
           try {
 
-            scanResults = await scanUrls(odUrls);
-
-            let reply;
-            
-            if (scanResults.length === 0) {
-              reply = await submission.reply(`
-Sorry, I didn't manage to scan this OD :/
-              `);
-            } else {
-
-              let reply = await submission.reply(this.generateComment(scanResults, this.devLink, this.feedbackLink));
-
-              console.log('replied to submission', submission.title);
-              count++;
-
-              // search the subreddit's mods for the bots user name
-              let sub = await this.client.getSubreddit(reply.subreddit.display_name);
-              let mod = await sub.getModerators({ name: this.username });
-
-              // approve reply if bot is a moderator with posts permission
-              if (mod.length > 0 && mod[0].mod_permissions.includes('posts')) {
-                await reply.approve();
-                console.log('approved comment');
-              }
-              
-            }
+            await this.scanAndComment(submission);
+            count++;
 
           } catch (err) {
-            console.error(`error replying to ${submission.id}: ${err}`);
+            console.error(err);
           }
 
         } else {
@@ -311,25 +354,60 @@ Sorry, I didn't manage to scan this OD :/
   async checkForMentions() {
 
     console.log('checking inbox for mentions...');
-    this.running.checkInbox = true;
+    this.running.checkForMentions = true;
     let success = 0;
     let failed = 0;
 
     try {
 
-      const mentions = await this.client.getInbox({
+      let mentions = (await this.client.getInbox({
         filter: `mentions`
+      })).filter(comment => {
+        return this.subsToMonitor.map(sub => sub.toLowerCase()).includes(comment.subreddit.display_name.toLowerCase())
       });
 
-      console.log(`mentions:`, mentions);
+       // filter only actual comment replies which the bot didn't already comment on
+      mentions = mentions.filter(async message => await message.was_comment == true)
 
-      this.running.checkInbox = false;
-      console.log(`successfully checked for mentions, success: ${success}, failed: ${failed}`);
+      let unrepliedInvokations = [];
+
+      for (let comment of mentions) {
+        if (!(await this.alreadyCommentedComment(comment))) {
+          unrepliedInvokations.push(comment);
+        } else {
+          // console.log(`already replied...`);
+        }
+      }
+
+      console.log(`unrepliedInvokations:`, unrepliedInvokations);
+
+      let successful = 0;
+      let failed = 0;
+
+      for (const comment of unrepliedInvokations) {
+
+        const submission = await this.client.getSubmission(comment.parent_id);
+
+        try {
+  
+          await this.scanAndComment(submission, comment);
+          successful++;
+  
+        } catch (err) {
+  
+          console.error(err);
+          failed++;
+  
+        }
+        
+      }
+
+      console.log(`successfully checked for mentions, successful: ${successful}, failed: ${failed}`);
 
     } catch (err) {
-
-      this.running.checkInbox = false;
       console.error(`an error occured checking for mentions: ${err}`);
+    } finally {
+      this.running.checkForMentions = false;
     }
 
   }
