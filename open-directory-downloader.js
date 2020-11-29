@@ -15,7 +15,7 @@ module.exports = class OpenDirectoryDownloader {
   scanUrl(url) {
     return new Promise((resolve, reject) => {
     
-      const oddProcess = spawn(this.executable, [`-u ${url}`, `--quit`, `--json`, `--no-urls`]);
+      const oddProcess = spawn(this.executable, [`-u ${url}`, `--quit`, `--json`, `--upload-urls`]);
 
       let output = ``;
       let error = ``;
@@ -43,6 +43,8 @@ module.exports = class OpenDirectoryDownloader {
         let redditOutput = `${redditOutputStartString}${output.split(redditOutputStartString).slice(1).join(redditOutputStartString)}`.split(redditOutputEndString).slice(0, -1).join(redditOutputEndString);
 
         let jsonFile = output.match(/Saved\ session:\ (.*)/)[1]; // get first capturing group. /g modifier has to be missing!
+        let urlFile = output.match(/Saved URL list to file:\ (.*)/)[1];
+        fs.unlinkSync(`${this.outputDir}${urlFile}`);
 
         let results;
         try {

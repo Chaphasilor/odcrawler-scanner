@@ -57,6 +57,8 @@ http.createServer((req, res) => {
       mentionsIntervall: process.env.REDDIT_POLLING_MENTIONS,
     });
 
+    console.log(`Bot is now running!`);
+
   } catch (err) {
     console.error(`Couldn't start the bot: ${err}`);
   }
