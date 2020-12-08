@@ -36,14 +36,16 @@ module.exports = class OpenDirectoryDownloader {
           reject(new Error(`ODD exited with code ${code}: ${error}`));
         }
 
+        const finalResults = output.split(`Finshed indexing`)[1];
+        
         const redditOutputStartString = `|`;
         const redditOutputEndString = `^(Created by [KoalaBear84's OpenDirectory Indexer](https://github.com/KoalaBear84/OpenDirectoryDownloader/))`;
         const credits = `^(Created by [KoalaBear84's OpenDirectory Indexer](https://github.com/KoalaBear84/OpenDirectoryDownloader/))`;
         
-        let redditOutput = `${redditOutputStartString}${output.split(redditOutputStartString).slice(1).join(redditOutputStartString)}`.split(redditOutputEndString).slice(0, -1).join(redditOutputEndString);
+        let redditOutput = `${redditOutputStartString}${finalResults.split(redditOutputStartString).slice(1).join(redditOutputStartString)}`.split(redditOutputEndString).slice(0, -1).join(redditOutputEndString);
 
-        let jsonFile = output.match(/Saved\ session:\ (.*)/)[1]; // get first capturing group. /g modifier has to be missing!
-        let urlFile = output.match(/Saved URL list to file:\ (.*)/)[1];
+        let jsonFile = finalResults.match(/Saved\ session:\ (.*)/)[1]; // get first capturing group. /g modifier has to be missing!
+        let urlFile = finalResults.match(/Saved URL list to file:\ (.*)/)[1];
         fs.unlinkSync(`${this.outputDir}${urlFile}`);
 
         let results;

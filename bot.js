@@ -1,17 +1,20 @@
 const Snoowrap = require('snoowrap');
 const qs = require('querystring');
 const request = require('request');
-const { scanUrls, extractUrls, submitScanResults } = require('./util');
+const { scanUrls, extractUrls, submitScanResults, FiniteArray } = require('./util');
 
 module.exports = class Bot {
 
-  constructor(toScrape, praises, clientOptions, blacklistedUsers) {
+  constructor(toScrape, praises, clientOptions, blacklistedUsers, staleTimeout) {
 
     this.BOT_START = Date.now() / 1000;
-    this.oldIds = [];
+    //TODO limit array size!!!
+    this.oldSubmissions = [];
+    this.oldMentions = [];
     this.toScrape = toScrape;
     this.praises = praises;
     this.blacklistedUsers = blacklistedUsers;
+    this.invokationsStaleTimeout = staleTimeout;
     this.client = new Snoowrap(clientOptions);
     this.username = clientOptions.username;
     this.subsToMonitor = Object.values(this.toScrape).reduce((allSubs, sorting) => [...allSubs, ...sorting], []);
@@ -148,11 +151,11 @@ module.exports = class Bot {
     
     // only include new submissions (not dealt with by the bot)
     filteredSubmissions = filteredSubmissions.filter(submission => {
-      return !this.oldIds.includes(submission.id);
+      return !this.oldSubmissions.includes(submission.id);
     })
     // remember all new submissions
     filteredSubmissions.forEach(submission => {
-      this.oldIds.push(submission.id);
+      this.oldSubmissions.push(submission.id);
     })
 
     return filteredSubmissions;
@@ -312,7 +315,7 @@ Sorry, I didn't manage to scan this OD :/
       // console.log('messages:', messages);
 
       // filter only actual comment replies which the bot didn't already comment on
-      let comments = messages.filter(async message => await message.was_comment == true)
+      let comments = messages.filter(message => message.was_comment == true)
 
       // console.log('comments:', comments);
 
@@ -357,7 +360,7 @@ Sorry, I didn't manage to scan this OD :/
 
   async checkForMentions() {
 
-    console.log('checking inbox for mentions...');
+    // console.log('checking inbox for mentions...');
     this.running.checkForMentions = true;
     let success = 0;
     let failed = 0;
@@ -370,25 +373,41 @@ Sorry, I didn't manage to scan this OD :/
         return this.subsToMonitor.map(sub => sub.toLowerCase()).includes(comment.subreddit.display_name.toLowerCase())
       });
 
-       // filter only actual comment replies which the bot didn't already comment on
-      mentions = mentions.filter(async message => await message.was_comment == true)
+      // filter only actual comment replies which the bot didn't already comment on
+      mentions = mentions.filter(message => message.was_comment == true)
 
-      let unrepliedInvokations = [];
+      // only include new mentions (not dealt with by the bot)
+      mentions = mentions.filter(comment => {
+        return !this.oldMentions.includes(comment.id);
+      })
+      // remember all new mentions
+      mentions.forEach(comment => {
+        this.oldMentions.push(comment.id);
+      })
+
+      // filter out stale comments
+      mentions = mentions.filter(comment => {
+        return comment.created_utc*1000 >= Date.now()-this.invokationsStaleTimeout*1000;
+      })
+
+      let unrepliedInvocations = [];
 
       for (let comment of mentions) {
         if (!(await this.alreadyCommentedComment(comment))) {
-          unrepliedInvokations.push(comment);
+          unrepliedInvocations.push(comment);
         } else {
           // console.log(`already replied...`);
         }
       }
 
-      console.log(`unrepliedInvokations:`, unrepliedInvokations);
+      if (unrepliedInvocations.length > 0) {
+        console.log(`unrepliedInvocations:`, unrepliedInvocations);
+      }
 
       let successful = 0;
       let failed = 0;
 
-      for (const comment of unrepliedInvokations) {
+      for (const comment of unrepliedInvocations) {
 
         const submission = await this.client.getSubmission(comment.parent_id);
 
@@ -406,10 +425,12 @@ Sorry, I didn't manage to scan this OD :/
         
       }
 
-      console.log(`successfully checked for mentions, successful: ${successful}, failed: ${failed}`);
+      if (successful + failed > 0) {
+        console.log(`successfully checked for mentions, successful: ${successful}, failed: ${failed}`);
+      }
 
     } catch (err) {
-      console.error(`an error occured checking for mentions: ${err}`);
+      console.error(`an error occured checking for mentions:`, err);
     } finally {
       this.running.checkForMentions = false;
     }

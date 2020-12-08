@@ -23,6 +23,7 @@ http.createServer((req, res) => {
 
   let toScrape;
   let blacklistedUsers;
+  let staleTimeout;
 
   try {
     toScrape = JSON.parse(process.env.REDDIT_SUBS_TO_SCRAPE);
@@ -38,6 +39,13 @@ http.createServer((req, res) => {
     blacklistedUsers = [];
   }
 
+  try {
+    staleTimeout = JSON.parse(process.env.REDDIT_CONSIDER_INVOCATION_STALE);
+  } catch (err) {
+    console.error('failed to load stale timeout from environment variable!');
+    staleTimeout = 3600;
+  }
+
   let clientOptions = {
     userAgent: process.env.REDDIT_USER_AGENT,
     clientId: process.env.REDDIT_CLIENT_ID,
@@ -47,7 +55,7 @@ http.createServer((req, res) => {
   };
 
 
-  const redditBot = new Bot(toScrape, praises, clientOptions, blacklistedUsers);
+  const redditBot = new Bot(toScrape, praises, clientOptions, blacklistedUsers, staleTimeout);
 
   try {
 
