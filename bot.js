@@ -409,8 +409,8 @@ Sorry, I didn't manage to scan this OD :/
         const submission = await this.client.getSubmission(comment.parent_id);
   
         this.scanAndComment(submission, comment)
-        .then(result => console.log(`result:`, result))
-        .catch(err => console.error(`failed to replay with scan result:`, err));
+        .then(result => console.log(`commented successfully!`))
+        .catch(err => console.error(`failed to reply with scan result:`, err));
 
       }
 

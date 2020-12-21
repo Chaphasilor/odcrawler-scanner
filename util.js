@@ -54,7 +54,7 @@ module.exports.extractUrls = async function extractUrls(submission) {
 
     let submissionText = await (submission.selftext);
     
-    let matches = urlsFromText(submissionText);
+    let matches = module.exports.urlsFromText(submissionText);
 
     return matches;
 
