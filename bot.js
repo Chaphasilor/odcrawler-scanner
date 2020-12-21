@@ -198,7 +198,7 @@ I'm a bot, beep, boop!
 
   }
 
-  scanAndComment(submission, comment) {
+  async scanAndComment(submission, comment) {
 
     submission = await submission.fetch();
     if (comment) {
