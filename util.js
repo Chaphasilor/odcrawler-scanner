@@ -1,6 +1,7 @@
 const request = require('request');
 const querystring = require('querystring');
 const urlRegexSafe = require('url-regex-safe');
+const markdownLinkExtractor = require('markdown-link-extractor');
 
 const OpenDirectoryDownloader = require(`./open-directory-downloader`);
 
@@ -26,6 +27,21 @@ module.exports.scanUrls = async function scanUrls(urls) {
   
 }
 
+module.exports.urlsFromText = function urlsFromText(text) {
+
+  // return matches = text.match(urlRegexSafe({
+  //   strict: true,
+  //   exact: false,
+  //   ipv4: true,
+  //   ipv6: true,
+  //   localhost: false,
+  //   parens: false, // don't include markdown's trainling parentheses in URL 
+  // }))
+
+  return markdownLinkExtractor(text);
+  
+}
+
 module.exports.extractUrls = async function extractUrls(submission) {
 
 
@@ -36,16 +52,9 @@ module.exports.extractUrls = async function extractUrls(submission) {
     
   } else {
 
-    let test = await (submission.selftext);
+    let submissionText = await (submission.selftext);
     
-    let matches = test.match(urlRegexSafe({
-      strict: true,
-      exact: false,
-      ipv4: true,
-      ipv6: true,
-      localhost: false,
-      parens: false, // don't include markdown's trainling parentheses in URL 
-    }));
+    let matches = urlsFromText(submissionText);
 
     return matches;
 

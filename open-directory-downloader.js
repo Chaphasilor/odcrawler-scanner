@@ -29,6 +29,10 @@ module.exports = class OpenDirectoryDownloader {
         console.warn(`Error from ODD: ${data}`);
         error += data;
       });
+
+      oddProcess.on(`error`, (err) => {
+        return reject(err);
+      })
       
       oddProcess.on('close', (code) => {
 
@@ -36,6 +40,10 @@ module.exports = class OpenDirectoryDownloader {
           reject(new Error(`ODD exited with code ${code}: ${error}`));
         }
 
+        if (output.split(`Finshed indexing`).length <= 1) {
+          return reject(new Error(`ODD never finished indexing!`));
+        }
+        
         const finalResults = output.split(`Finshed indexing`)[1];
         
         const redditOutputStartString = `|`;
@@ -44,8 +52,17 @@ module.exports = class OpenDirectoryDownloader {
         
         let redditOutput = `${redditOutputStartString}${finalResults.split(redditOutputStartString).slice(1).join(redditOutputStartString)}`.split(redditOutputEndString).slice(0, -1).join(redditOutputEndString);
 
-        let jsonFile = finalResults.match(/Saved\ session:\ (.*)/)[1]; // get first capturing group. /g modifier has to be missing!
-        let urlFile = finalResults.match(/Saved URL list to file:\ (.*)/)[1];
+        let sessionRegexResults = finalResults.match(/Saved\ session:\ (.*)/);
+        if (sessionRegexResults.length <= 1) {
+          return reject(new Error(`JSON session file not found!`));
+        }
+        let jsonFile = sessionRegexResults[1]; // get first capturing group. /g modifier has to be missing!
+
+        let urlListRegexResults = finalResults.match(/Saved URL list to file:\ (.*)/);
+        if (urlListRegexResults.length <= 1) {
+          return reject(new Error(`URL list file not found!`));
+        }
+        let urlFile = urlListRegexResults[1];
         fs.unlinkSync(`${this.outputDir}${urlFile}`);
 
         let results;

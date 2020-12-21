@@ -4,7 +4,8 @@
   "description": "A reddit bot that scans /r/OpenDirectories for new submissions and submits them to the ODCrawler discovery server",
   "main": "launcher.js",
   "scripts": {
-    "start": "node launcher.js"
+    "start": "node launcher.js",
+    "test": "node tests.js"
   },
   "keywords": [
     "reddit",
@@ -14,9 +15,14 @@
   "license": "GPL-3.0",
   "dependencies": {
     "dotenv": "^8.2.0",
+    "markdown-link-extractor": "^1.2.6",
     "querystring": "^0.2.0",
     "request": "^2.88.0",
     "snoowrap": "^1.20.1",
     "url-regex-safe": "^1.0.2"
+  },
+  "devDependencies": {
+    "tape": "^5.0.1",
+    "tape-promise": "^4.0.0"
   }
 }

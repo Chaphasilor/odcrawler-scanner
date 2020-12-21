@@ -198,7 +198,7 @@ I'm a bot, beep, boop!
 
   }
 
-  async scanAndComment(submission, comment) {
+  scanAndComment(submission, comment) {
 
     submission = await submission.fetch();
     if (comment) {
@@ -404,29 +404,14 @@ Sorry, I didn't manage to scan this OD :/
         console.log(`unrepliedInvocations:`, unrepliedInvocations);
       }
 
-      let successful = 0;
-      let failed = 0;
-
       for (const comment of unrepliedInvocations) {
 
         const submission = await this.client.getSubmission(comment.parent_id);
+  
+        this.scanAndComment(submission, comment)
+        .then(result => console.log(`result:`, result))
+        .catch(err => console.error(`failed to replay with scan result:`, err));
 
-        try {
-  
-          await this.scanAndComment(submission, comment);
-          successful++;
-  
-        } catch (err) {
-  
-          console.error(err);
-          failed++;
-  
-        }
-        
-      }
-
-      if (successful + failed > 0) {
-        console.log(`successfully checked for mentions, successful: ${successful}, failed: ${failed}`);
       }
 
     } catch (err) {
