@@ -53,13 +53,13 @@ module.exports = class OpenDirectoryDownloader {
         let redditOutput = `${redditOutputStartString}${finalResults.split(redditOutputStartString).slice(1).join(redditOutputStartString)}`.split(redditOutputEndString).slice(0, -1).join(redditOutputEndString);
 
         let sessionRegexResults = finalResults.match(/Saved\ session:\ (.*)/);
-        if (sessionRegexResults.length <= 1) {
+        if (!sessionRegexResults || sessionRegexResults.length <= 1) {
           return reject(new Error(`JSON session file not found!`));
         }
         let jsonFile = sessionRegexResults[1]; // get first capturing group. /g modifier has to be missing!
 
         let urlListRegexResults = finalResults.match(/Saved URL list to file:\ (.*)/);
-        if (urlListRegexResults.length <= 1) {
+        if (!urlListRegexResults || urlListRegexResults.length <= 1) {
           return reject(new Error(`URL list file not found!`));
         }
         let urlFile = urlListRegexResults[1];
