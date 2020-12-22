@@ -226,9 +226,19 @@ I'm a bot, beep, boop!
       let reply;
       
       if (scanResults.length === 0) {
-        reply = await submission.reply(`
+
+        if (comment) {
+          reply = await comment.reply(`
 Sorry, I didn't manage to scan this OD :/
-        `);
+          `);
+          console.log(`replied to comment https://reddit.com/comments/${submission.id}/_/${comment.id}`);
+        } else {
+          reply = await submission.reply(`
+Sorry, I didn't manage to scan this OD :/
+          `);
+          console.log(`replied to '${submission.title}' (https://reddit.com/${submission.id})`);
+        }
+        
       } else {
 
         if (comment) {
