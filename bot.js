@@ -382,10 +382,10 @@ Sorry, I didn't manage to scan this OD :/
       })).filter(comment => {
         return this.subsToMonitor.map(sub => sub.toLowerCase()).includes(comment.subreddit.display_name.toLowerCase())
       });
-
+      
       // filter only actual comment replies which the bot didn't already comment on
       mentions = mentions.filter(message => message.was_comment == true)
-
+      
       // only include new mentions (not dealt with by the bot)
       mentions = mentions.filter(comment => {
         return !this.oldMentions.includes(comment.id);
@@ -394,12 +394,12 @@ Sorry, I didn't manage to scan this OD :/
       mentions.forEach(comment => {
         this.oldMentions.push(comment.id);
       })
-
+      
       // filter out stale comments
       mentions = mentions.filter(comment => {
         return comment.created_utc*1000 >= Date.now()-this.invokationsStaleTimeout*1000;
       })
-
+      
       let unrepliedInvocations = [];
 
       for (let comment of mentions) {
@@ -416,7 +416,13 @@ Sorry, I didn't manage to scan this OD :/
 
       for (const comment of unrepliedInvocations) {
 
-        const submission = await this.client.getSubmission(comment.parent_id);
+        //TODO maybe https://github.com/not-an-aardvark/snoowrap/issues/302 can improve this
+        let topLevelComment = await comment.fetch();
+        while (topLevelComment.parent_id.charAt(1) === `1`) {
+          topLevelComment = await (await this.client.getComment(topLevelComment.parent_id)).fetch()
+        }
+        
+        const submission = await this.client.getSubmission(topLevelComment.parent_id);
   
         this.scanAndComment(submission, comment)
         .then(result => console.log(`commented successfully!`))
