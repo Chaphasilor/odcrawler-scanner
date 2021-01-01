@@ -201,14 +201,21 @@ I'm a bot, beep, boop!
   async scanAndComment(submission, comment) {
 
     submission = await submission.fetch();
+
+    let odUrls;
+    
     if (comment) {
       comment = await comment.fetch();
     }
+
+    if (comment) {
+      console.log(`scanning *comment with custom urls* on '${submission.title}' (https://reddit.com/${submission.id})`);
+      odUrls = await extractUrls(comment, true);
+    } else {
+      console.log(`scanning '${submission.title}' (https://reddit.com/${submission.id})`);
+      odUrls = await extractUrls(submission);
+    }
     
-    console.log(`scanning '${submission.title}' (https://reddit.com/${submission.id})`);
-
-    let odUrls = await extractUrls(submission);
-
     console.log(`odUrls:`, odUrls);
 
     let scanResults;
@@ -382,7 +389,7 @@ Sorry, I didn't manage to scan this OD :/
       })).filter(comment => {
         return this.subsToMonitor.map(sub => sub.toLowerCase()).includes(comment.subreddit.display_name.toLowerCase())
       });
-      
+
       // filter only actual comment replies which the bot didn't already comment on
       mentions = mentions.filter(message => message.was_comment == true)
       
@@ -414,15 +421,11 @@ Sorry, I didn't manage to scan this OD :/
         console.log(`unrepliedInvocations:`, unrepliedInvocations);
       }
 
-      for (const comment of unrepliedInvocations) {
+      for (let comment of unrepliedInvocations) {
 
-        //TODO maybe https://github.com/not-an-aardvark/snoowrap/issues/302 can improve this
-        let topLevelComment = await comment.fetch();
-        while (topLevelComment.parent_id.charAt(1) === `1`) {
-          topLevelComment = await (await this.client.getComment(topLevelComment.parent_id)).fetch()
-        }
-        
-        const submission = await this.client.getSubmission(topLevelComment.parent_id);
+        comment = await (await this.client.getComment(comment.id)).fetch() // reload the comment because a comment fetched via the inbox is missing some fields (like link_id)
+
+        const submission = await this.client.getSubmission(comment.link_id);
   
         this.scanAndComment(submission, comment)
         .then(result => console.log(`commented successfully!`))

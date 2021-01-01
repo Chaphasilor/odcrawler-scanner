@@ -42,23 +42,31 @@ module.exports.urlsFromText = function urlsFromText(text) {
   
 }
 
-module.exports.extractUrls = async function extractUrls(submission) {
+module.exports.extractUrls = async function extractUrls(submissionOrComment, isComment = false) {
 
+  let matches;
+  
+  if (isComment) {
 
-
-  if (!(await submission.is_self)) {
-
-    return [await submission.url];
-    
+    matches = module.exports.urlsFromText(submissionOrComment.body);
+  
   } else {
 
-    let submissionText = await (submission.selftext);
+    if (!(await submissionOrComment.is_self)) {
+  
+      matches = [await submissionOrComment.url];
+      
+    } else {
+  
+      let submissionText = await (submissionOrComment.selftext);
+      
+      matches = module.exports.urlsFromText(submissionText);
+  
+    }
     
-    let matches = module.exports.urlsFromText(submissionText);
-
-    return matches;
-
   }
+  
+  return matches;
   
 }
 
