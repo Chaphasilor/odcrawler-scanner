@@ -208,13 +208,15 @@ I'm a bot, beep, boop!
       comment = await comment.fetch();
     }
 
-    if (comment) {
+    odUrls = await extractUrls(comment, true);
+
+    if (odUrls.length > 0) {
       console.log(`scanning *comment with custom urls* on '${submission.title}' (https://reddit.com/${submission.id})`);
-      odUrls = await extractUrls(comment, true);
     } else {
       console.log(`scanning '${submission.title}' (https://reddit.com/${submission.id})`);
       odUrls = await extractUrls(submission);
     }
+
     
     console.log(`odUrls:`, odUrls);
 
@@ -384,12 +386,18 @@ Sorry, I didn't manage to scan this OD :/
 
     try {
 
-      let mentions = (await this.client.getInbox({
-        filter: `mentions`
-      })).filter(comment => {
-        return this.subsToMonitor.map(sub => sub.toLowerCase()).includes(comment.subreddit.display_name.toLowerCase())
-      });
+      let mentions = []
+      try {
 
+        mentions = (await this.client.getInbox({
+          filter: `mentions`
+        })).filter(comment => {
+          return this.subsToMonitor.map(sub => sub.toLowerCase()).includes(comment.subreddit.display_name.toLowerCase())
+        });
+
+      } catch (err) {
+        console.error(`Couldn't load mentions, seems like there aren't any?:`, err)
+      }
       // filter only actual comment replies which the bot didn't already comment on
       mentions = mentions.filter(message => message.was_comment == true)
       
@@ -425,6 +433,7 @@ Sorry, I didn't manage to scan this OD :/
 
         comment = await (await this.client.getComment(comment.id)).fetch() // reload the comment because a comment fetched via the inbox is missing some fields (like link_id)
 
+        // const submission = await this.client.getSubmission(comment.context.split(`/`)[4]);
         const submission = await this.client.getSubmission(comment.link_id);
   
         this.scanAndComment(submission, comment)

@@ -12,7 +12,7 @@ module.exports = class OpenDirectoryDownloader {
     
   }
 
-  scanUrl(url) {
+  scanUrl(url, keepJson = false) {
     return new Promise((resolve, reject) => {
     
       const oddProcess = spawn(this.executable, [`-u ${url}`, `--quit`, `--json`, `--upload-urls`, `--speedtest`]);
@@ -44,7 +44,10 @@ module.exports = class OpenDirectoryDownloader {
           return reject(new Error(`ODD never finished indexing!`));
         }
         
-        const finalResults = output.split(`Finshed indexing`)[1];
+        // const finalResults = output.split(`Finshed indexing`)[1];
+        const finalResults = output.split(`Saving URL list to file...`)[1];
+
+        console.log(`finalResults:`, finalResults);
         
         const redditOutputStartString = `|`;
         const redditOutputEndString = `^(Created by [KoalaBear84's OpenDirectory Indexer](https://github.com/KoalaBear84/OpenDirectoryDownloader/))`;
@@ -69,12 +72,15 @@ module.exports = class OpenDirectoryDownloader {
         try {
 
           results = JSON.parse(fs.readFileSync(`${this.outputDir}${jsonFile}`));
-          fs.unlinkSync(`${this.outputDir}${jsonFile}`);
+          if (!keepJson) {
+            fs.unlinkSync(`${this.outputDir}${jsonFile}`);
+          }
           
         } catch (err) {
           console.error(`err:`, err);
 
           resolve({
+            scanFile: `${this.outputDir}${jsonFile}`,
             reddit: redditOutput,
             credits,
           })
@@ -83,6 +89,7 @@ module.exports = class OpenDirectoryDownloader {
 
         resolve({
           scan: results,
+          scanFile: `${this.outputDir}${jsonFile}`,
           reddit: redditOutput,
           credits,
         })

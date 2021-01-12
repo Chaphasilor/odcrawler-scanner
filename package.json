@@ -15,11 +15,11 @@
   "license": "GPL-3.0",
   "dependencies": {
     "dotenv": "^8.2.0",
+    "form-data": "^3.0.0",
     "markdown-link-extractor": "^1.2.6",
-    "querystring": "^0.2.0",
+    "node-fetch": "^2.6.1",
     "request": "^2.88.0",
-    "snoowrap": "^1.20.1",
-    "url-regex-safe": "^1.0.2"
+    "snoowrap": "^1.22.0"
   },
   "devDependencies": {
     "tape": "^5.0.1",

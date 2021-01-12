@@ -1,7 +1,7 @@
-const request = require('request');
-const querystring = require('querystring');
-const urlRegexSafe = require('url-regex-safe');
+const fs = require(`fs`);
 const markdownLinkExtractor = require('markdown-link-extractor');
+const fetch = require(`node-fetch`);
+const FormData = require(`form-data`);
 
 const OpenDirectoryDownloader = require(`./open-directory-downloader`);
 
@@ -14,12 +14,14 @@ module.exports.scanUrls = async function scanUrls(urls) {
   for (let url of urls) {
 
     try {
-      scanResults.push(await odd.scanUrl(url));
+      scanResults.push(await odd.scanUrl(url, true));
     } catch (err) {
       console.warn(`Failed to scan OD:`, err);
     }
     
   }
+
+  scanResults.forEach(result => uploadScan(result.scanFile));
 
   console.log(`scanResults:`, scanResults);
 
@@ -76,4 +78,30 @@ module.exports.submitScanResults = function submitScanResults(scanResults) {
 
   return;
   
+}
+
+async function uploadScan(scanFile) {
+
+  const form = new FormData();
+  form.append(`file`, fs.createReadStream(scanFile))
+  
+  let res = await fetch(`${process.env.ODCRAWLER_DISCOVERY_ENDPOINT}/upload`, {
+    method: `POST`,
+    headers: {
+      Authorization: 'Basic ' + Buffer.from(process.env.ODCRAWLER_DISCOVERY_UPLOAD_USERNAME + ":" + process.env.ODCRAWLER_DISCOVERY_UPLOAD_PASSWORD).toString('base64'),
+    },
+    body: form,
+  });
+
+  let jsonResponse;
+  try {
+    jsonResponse = await res.json();
+  } catch (err) {
+    console.error(`Failed to upload scan to discovery server:`, err);
+  }
+
+  if (res.ok && jsonResponse.ok) {
+    console.log(`Scan uploaded successfully! Path: ${jsonResponse.path}`);
+  }
+
 }
