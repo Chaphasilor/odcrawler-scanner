@@ -21,7 +21,7 @@ module.exports.scanUrls = async function scanUrls(urls) {
     
   }
 
-  scanResults.forEach(result => uploadScan(result.scanFile));
+  scanResults.forEach(result => saveScanResults(result.scanFile, result.scannedUrl));
 
   console.log(`scanResults:`, scanResults);
 
@@ -72,18 +72,106 @@ module.exports.extractUrls = async function extractUrls(submissionOrComment, isC
   
 }
 
-module.exports.submitScanResults = function submitScanResults(scanResults) {
+function saveScanResults(scanPath, scannedUrl) {
 
-  console.log(`process.env.ODCRAWLER_DISCOVERY_ENDPOINT:`, process.env.ODCRAWLER_DISCOVERY_ENDPOINT);
+  try {
 
-  return;
+    let db = JSON.parse(fs.readFileSync(process.env.DB_FILE_PATH, {
+      encoding: `utf-8`,
+    }))
+
+    db.push({
+      scannedUrl,
+      pathToScanFile: scanPath,
+    })
+
+    fs.writeFileSync(process.env.DB_FILE_PATH, JSON.stringify(db))
+
+    console.log(`Saved scan result to db file`)
+    
+  } catch (err) {
+    console.error(`Error while saving scan results to db file:`, err);
+  }
   
 }
 
-async function uploadScan(scanFile) {
+async function checkDiscoveryServerReachable() {
 
+  while (true) {
+
+    console.log(`Checking if discovery server is reachable...`);
+
+    let res = await fetch(process.env.ODCRAWLER_DISCOVERY_ENDPOINT, {
+      method: `head`,
+    })
+  
+    if (res.ok) {
+
+      console.log(`Discovery server is online!`);
+      await tryToUploadScansFromDB()
+
+    } else {
+      console.log(`Discovery server appears to be offline.`);
+    }
+  
+    let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
+
+    console.log(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
+    await sleep(sleepMinutes*60*1000)
+
+  }
+  
+}
+module.exports.checkDiscoveryServerReachable = checkDiscoveryServerReachable
+
+async function tryToUploadScansFromDB() {
+
+  console.log(`Trying to upload saved scans to the discovery server...`)
+  
+  try {
+    
+    let db = JSON.parse(fs.readFileSync(process.env.DB_FILE_PATH, {
+      encoding: `utf-8`,
+    }))
+
+    let failed = []
+
+    if (db.length == 0) {
+      console.log(`No scans left to upload!`)
+      return
+    }
+    
+    for (const scanResult of db) {
+
+      try {
+        
+        await uploadScan(scanResult.pathToScanFile)
+        fs.unlinkSync(scanResult.pathToScanFile)
+        console.log(`Scan file deleted!`)
+        
+      } catch (err) {
+
+        console.error(`Error while uploading scan:`, err)
+        failed.push(scanResult)
+        
+      }
+      
+    }
+
+    fs.writeFileSync(process.env.DB_FILE_PATH, JSON.stringify(failed))
+    
+  } catch (err) {
+    console.error(`Error while trying to upload scans:`, err)
+  }
+  
+} 
+
+async function uploadScan(scanPath) {
+
+  console.log(`Uploading scan...`)
+  
   const form = new FormData();
-  form.append(`file`, fs.createReadStream(scanFile))
+  form.append(`file`, fs.createReadStream(scanPath))
   
   let res = await fetch(`${process.env.ODCRAWLER_DISCOVERY_ENDPOINT}/upload`, {
     method: `POST`,
@@ -97,11 +185,20 @@ async function uploadScan(scanFile) {
   try {
     jsonResponse = await res.json();
   } catch (err) {
-    console.error(`Failed to upload scan to discovery server:`, err);
+    throw new Error(`Failed to upload scan to discovery server: ${err}`);
   }
 
   if (res.ok && jsonResponse.ok) {
     console.log(`Scan uploaded successfully! Path: ${jsonResponse.path}`);
+  } else {
+    throw new Error(`Failed to upload scan: ${jsonResponse.error}`)
   }
 
 }
+
+function sleep(ms) {
+  return new Promise((resolve, reject) => {
+    setTimeout(resolve, ms);
+  })
+}
+module.exports.sleep = sleep

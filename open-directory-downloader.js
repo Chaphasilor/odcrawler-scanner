@@ -80,6 +80,7 @@ module.exports = class OpenDirectoryDownloader {
           console.error(`err:`, err);
 
           resolve({
+            scannedUrl: url,
             scanFile: `${this.outputDir}${jsonFile}`,
             reddit: redditOutput,
             credits,
@@ -88,6 +89,7 @@ module.exports = class OpenDirectoryDownloader {
         }
 
         resolve({
+          scannedUrl: url,
           scan: results,
           scanFile: `${this.outputDir}${jsonFile}`,
           reddit: redditOutput,

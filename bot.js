@@ -2,6 +2,7 @@ const Snoowrap = require('snoowrap');
 const qs = require('querystring');
 const request = require('request');
 const { scanUrls, extractUrls, submitScanResults, FiniteArray } = require('./util');
+const { SSL_OP_EPHEMERAL_RSA } = require('constants');
 
 module.exports = class Bot {
 
@@ -377,6 +378,12 @@ Sorry, I didn't manage to scan this OD :/
 
   }
 
+  sleep(ms) {
+    return new Promise((resolve, reject) => {
+      setTimeout(resolve, ms);
+    })
+  }
+  
   async checkForMentions() {
 
     // console.log('checking inbox for mentions...');
@@ -398,6 +405,7 @@ Sorry, I didn't manage to scan this OD :/
       } catch (err) {
         console.error(`Couldn't load mentions, seems like there aren't any?:`, err)
       }
+
       // filter only actual comment replies which the bot didn't already comment on
       mentions = mentions.filter(message => message.was_comment == true)
       
@@ -436,9 +444,14 @@ Sorry, I didn't manage to scan this OD :/
         // const submission = await this.client.getSubmission(comment.context.split(`/`)[4]);
         const submission = await this.client.getSubmission(comment.link_id);
   
-        this.scanAndComment(submission, comment)
-        .then(result => console.log(`commented successfully!`))
-        .catch(err => console.error(`failed to reply with scan result:`, err));
+        try {
+
+          await this.scanAndComment(submission, comment)
+          console.log(`commented successfully!`)
+
+        } catch (err) {
+          console.error(`failed to reply with scan result:`, err)
+        }
 
       }
 

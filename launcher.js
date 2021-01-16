@@ -1,16 +1,6 @@
 require('dotenv').config();
 const Bot = require('./bot');
-const { getUrl } = require('./util');
-const http = require('http');
-
-let port = process.env.PORT != undefined ? process.env.PORT : 6969;
-
-http.createServer((req, res) => {
-
-  res.write('Online!');
-  res.end();
-  
-}).listen(port);
+const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
 (async () => {
 
@@ -73,8 +63,4 @@ http.createServer((req, res) => {
 
 })();
 
-function sleep(ms) {
-  return new Promise((resolve, reject) => {
-    setTimeout(resolve, ms);
-  })
-}
+checkDiscoveryServerReachable()
