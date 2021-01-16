@@ -175,7 +175,6 @@ module.exports = class Bot {
         throw 'No comments found';
       }
     } catch (err) {
-      console.log('err:', err);
       return false;
     }
   }
@@ -424,6 +423,10 @@ Sorry, I didn't manage to scan this OD :/
       })
       
       let unrepliedInvocations = [];
+
+      // temporary workaround until https://github.com/not-an-aardvark/snoowrap/issues/305 is resolved
+      // console.log(`sleeping 10s before checking comments for replies`)
+      await this.sleep(10000)
 
       for (let comment of mentions) {
         if (!(await this.alreadyCommentedComment(comment))) {
