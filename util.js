@@ -3,7 +3,7 @@ const markdownLinkExtractor = require('markdown-link-extractor');
 const fetch = require(`node-fetch`);
 const FormData = require(`form-data`);
 
-const OpenDirectoryDownloader = require(`./open-directory-downloader`);
+const OpenDirectoryDownloader = require(`open-directory-downloader`);
 
 const odd = new OpenDirectoryDownloader();
 
@@ -14,14 +14,18 @@ module.exports.scanUrls = async function scanUrls(urls) {
   for (let url of urls) {
 
     try {
-      scanResults.push(await odd.scanUrl(url, true));
+      scanResults.push(await odd.scanUrl(url, {
+        keepJsonFile: true,
+        performSpeedtest: true,
+        uploadUrlFile: true,
+      }));
     } catch (err) {
       console.warn(`Failed to scan OD:`, err);
     }
     
   }
 
-  scanResults.forEach(result => saveScanResults(result.scanFile, result.scannedUrl));
+  scanResults.forEach(result => saveScanResults(result.jsonFile, result.scannedUrl));
 
   console.log(`scanResults:`, scanResults);
 
@@ -145,9 +149,15 @@ async function tryToUploadScansFromDB() {
 
       try {
         
-        await uploadScan(scanResult.pathToScanFile)
-        fs.unlinkSync(scanResult.pathToScanFile)
-        console.log(`Scan file deleted!`)
+        if (fs.existsSync(scanResult.pathToScanFile)) {
+
+          await uploadScan(scanResult.pathToScanFile)
+          fs.unlinkSync(scanResult.pathToScanFile)
+          console.log(`Scan file deleted!`)
+
+        } else {
+          console.warn(`Scan file doesn't exist anymore, removing from DB...`)
+        }
         
       } catch (err) {
 
@@ -179,6 +189,8 @@ async function uploadScan(scanPath) {
       Authorization: 'Basic ' + Buffer.from(process.env.ODCRAWLER_DISCOVERY_UPLOAD_USERNAME + ":" + process.env.ODCRAWLER_DISCOVERY_UPLOAD_PASSWORD).toString('base64'),
     },
     body: form,
+    timeout: 0,
+    compress: true,
   });
 
   let jsonResponse;
