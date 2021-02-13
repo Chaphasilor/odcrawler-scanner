@@ -1,4 +1,6 @@
 const fs = require(`fs`);
+const { createGzip } = require('zlib');
+const pipe = require(`util`).promisify(require(`stream`).pipeline);
 const markdownLinkExtractor = require('markdown-link-extractor');
 const fetch = require(`node-fetch`);
 const FormData = require(`form-data`);
@@ -76,7 +78,22 @@ module.exports.extractUrls = async function extractUrls(submissionOrComment, isC
   
 }
 
-function saveScanResults(scanPath, scannedUrl) {
+async function saveScanResults(scanPath, scannedUrl) {
+
+  let fileToUpload
+  try {
+    
+    fileToUpload = await compressFile(scanPath)
+    if (scanPath !== fileToUpload) {
+      fs.unlinkSync(scanPath)
+    }
+    
+  } catch (err) {
+
+    console.warn(`Couldn't compress file '${scanPath}':`, err)
+    fileToUpload = scanPath
+
+  }
 
   try {
 
@@ -86,7 +103,7 @@ function saveScanResults(scanPath, scannedUrl) {
 
     db.push({
       scannedUrl,
-      pathToScanFile: scanPath,
+      pathToScanFile: fileToUpload,
     })
 
     fs.writeFileSync(process.env.DB_FILE_PATH, JSON.stringify(db))
@@ -206,6 +223,24 @@ async function uploadScan(scanPath) {
     throw new Error(`Failed to upload scan: ${jsonResponse.error}`)
   }
 
+}
+
+/**
+ * Compresses a file using gzip
+ * @param {String} input The path to the input file
+ * @param {String} [output] The path to the output file. Can't exist yet.
+ * @returns {String} The path to the output file
+ */
+async function compressFile(input, output) {
+  
+  const outputName = output || `${input}.gz`;
+  const gzip = createGzip();
+  const source = fs.createReadStream(input);
+  const destination = fs.createWriteStream(outputName);
+  await pipe(source, gzip, destination);
+
+  return outputName
+  
 }
 
 function sleep(ms) {
