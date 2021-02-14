@@ -179,8 +179,19 @@ module.exports = class Bot {
     }
   }
 
-  generateComment(scanResults, devLink, feedbackLink) {
+  generateComment(scanResults, originalUrls, devLink, feedbackLink) {
 
+    let failedUrls = originalUrls.filter(url => !scanResults.find(x => x.scannedUrl === url))
+    let failedString = `  \n`
+    
+    if (failedUrls.length > 0) {
+      failedString = `  \nWhoops, I failed to scan the following URLs:  \n`
+      for (const url of failedUrls) {
+        failedString += `${url}  \n`
+      }
+      failedString += `\nI swear I really tried [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)  \n`
+    }
+    
     let tables = scanResults.reduce((tableString, cur)=> {
       return `${tableString}\n${cur.reddit}`;
     }, ``);
@@ -190,6 +201,8 @@ Here are the scan results:
 
 ${tables}  
 ${scanResults[0].credits}
+${failedString}
+---
 
 I'm a bot, beep, boop!
 
@@ -220,7 +233,7 @@ I'm a bot, beep, boop!
     
     console.log(`odUrls:`, odUrls);
 
-    let scanResults;
+    let scanResults = [];
 
     try {
       
@@ -234,27 +247,11 @@ I'm a bot, beep, boop!
 
       let reply;
       
-      if (scanResults.length === 0) {
-
         if (comment) {
-          reply = await comment.reply(`
-Sorry, I didn't manage to scan this OD :/
-          `);
+          reply = await comment.reply(this.generateComment(scanResults, odUrls, this.devLink, this.feedbackLink));
           console.log(`replied to comment https://reddit.com/comments/${submission.id}/_/${comment.id}`);
         } else {
-          reply = await submission.reply(`
-Sorry, I didn't manage to scan this OD :/
-          `);
-          console.log(`replied to '${submission.title}' (https://reddit.com/${submission.id})`);
-        }
-        
-      } else {
-
-        if (comment) {
-          reply = await comment.reply(this.generateComment(scanResults, this.devLink, this.feedbackLink));
-          console.log(`replied to comment https://reddit.com/comments/${submission.id}/_/${comment.id}`);
-        } else {
-          reply = await submission.reply(this.generateComment(scanResults, this.devLink, this.feedbackLink));
+          reply = await submission.reply(this.generateComment(scanResults, odUrls, this.devLink, this.feedbackLink));
           console.log(`replied to '${submission.title}' (https://reddit.com/${submission.id})`);
         }
 
@@ -269,11 +266,20 @@ Sorry, I didn't manage to scan this OD :/
           console.log('approved comment');
         }
         
-      }
-
     } catch (err) {
       throw new Error(`error replying to https://reddit.com/${submission.id}: ${err}`);
     }
+    
+  }
+
+  async apologize(submissionOrComment) {
+
+    reply = await submissionOrComment.reply(`
+Sorry, I didn't manage to scan this OD :/
+
+[ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)
+    `);
+    console.log(`apologized to ${submissionOrComment.id}`);
     
   }
 
@@ -302,7 +308,14 @@ Sorry, I didn't manage to scan this OD :/
             count++;
 
           } catch (err) {
+
             console.error(err);
+            try {
+              await apologize(submission);
+            } catch (err) {
+              console.error(`Failed to apologize:`, err)
+            }
+            
           }
 
         } else {
@@ -453,7 +466,15 @@ Sorry, I didn't manage to scan this OD :/
           console.log(`commented successfully!`)
 
         } catch (err) {
+
           console.error(`failed to reply with scan result:`, err)
+
+          try {
+            await apologize(comment)
+          } catch (err) {
+            console.error(`Failed to apologize:`, err)
+          }
+          
         }
 
       }

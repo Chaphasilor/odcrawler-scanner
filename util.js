@@ -120,7 +120,7 @@ async function checkDiscoveryServerReachable() {
 
   while (true) {
 
-    console.log(`Checking if discovery server is reachable...`);
+    console.debug(`Checking if discovery server is reachable...`);
 
     let res = await fetch(process.env.ODCRAWLER_DISCOVERY_ENDPOINT, {
       method: `head`,
@@ -128,16 +128,16 @@ async function checkDiscoveryServerReachable() {
   
     if (res.ok) {
 
-      console.log(`Discovery server is online!`);
+      console.debug(`Discovery server is online!`);
       await tryToUploadScansFromDB()
 
     } else {
-      console.log(`Discovery server appears to be offline.`);
+      console.warn(`Discovery server appears to be offline.`);
     }
   
     let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
 
-    console.log(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
+    console.debug(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
     await sleep(sleepMinutes*60*1000)
 
   }
@@ -147,7 +147,7 @@ module.exports.checkDiscoveryServerReachable = checkDiscoveryServerReachable
 
 async function tryToUploadScansFromDB() {
 
-  console.log(`Trying to upload saved scans to the discovery server...`)
+  console.debug(`Trying to upload saved scans to the discovery server...`)
   
   try {
     
@@ -158,7 +158,7 @@ async function tryToUploadScansFromDB() {
     let failed = []
 
     if (db.length == 0) {
-      console.log(`No scans left to upload!`)
+      console.debug(`No scans left to upload!`)
       return
     }
     
