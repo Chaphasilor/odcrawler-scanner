@@ -242,7 +242,7 @@ I'm a bot, beep, boop!
       scanResults = await scanUrls(odUrls);
 
     } catch (err) {
-      throw new Error(`error scanning OD: ${err.message}`)
+      throw err
     }
     
     try {
@@ -274,12 +274,14 @@ I'm a bot, beep, boop!
     
   }
 
-  async apologize(submissionOrComment) {
+  async apologize(submissionOrComment, reason) {
 
-    reply = await submissionOrComment.reply(`
+    let reply = await submissionOrComment.reply(`
 Sorry, I didn't manage to scan this OD :/
 
 [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)
+
+${reason ? `(Reason: ${reason})` : ``}
     `);
     console.log(`apologized to ${submissionOrComment.id}`);
     
@@ -442,14 +444,14 @@ Sorry, I didn't manage to scan this OD :/
 
         } catch (err) {
 
-          if (err.includes(`DELETED_COMMENT`)) {
+          if (err.message.includes(`DELETED_COMMENT`)) {
             console.warn(`Invoking comment was deleted by the user!`)  
           } else {
 
             console.error(`failed to reply with scan result:`, err)
 
             try {
-              await this.apologize(message)
+              await this.apologize(message, err.message)
             } catch (err) {
               console.error(`Failed to apologize:`, err)
             }
@@ -540,14 +542,14 @@ Sorry, I didn't manage to scan this OD :/
 
         } catch (err) {
 
-          if (err.includes(`DELETED_COMMENT`)) {
+          if (err.message.includes(`DELETED_COMMENT`)) {
             console.warn(`Invoking comment was deleted by the user!`)  
           } else {
 
             console.error(`failed to reply with scan result:`, err)
 
             try {
-              await this.apologize(comment)
+              await this.apologize(comment, err.message)
             } catch (err) {
               console.error(`Failed to apologize:`, err)
             }

@@ -31,6 +31,10 @@ module.exports.scanUrls = async function scanUrls(urls) {
 
   console.log(`scanResults:`, scanResults);
 
+  if (scanResults.length <= 0 && urls.length > 0) {
+    throw new Error(`OpenDirectoryDownloader couldn't scan any of the provided ODs`)
+  }
+
   return scanResults;
   
 }
