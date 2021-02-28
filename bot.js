@@ -12,10 +12,11 @@ module.exports = class Bot {
     //TODO limit array size!!!
     this.oldSubmissions = [];
     this.oldMentions = [];
+    this.oldPMs = [];
     this.toScrape = toScrape;
     this.praises = praises;
     this.blacklistedUsers = blacklistedUsers;
-    this.invokationsStaleTimeout = staleTimeout;
+    this.invocationsStaleTimeout = staleTimeout;
     this.client = new Snoowrap(clientOptions);
     this.username = clientOptions.username;
     this.subsToMonitor = Object.values(this.toScrape).reduce((allSubs, sorting) => [...allSubs, ...sorting], []);
@@ -24,6 +25,7 @@ module.exports = class Bot {
     this.running = {
       refreshSubmissions: false,
       checkInbox: false,
+      checkPMs: false,
       checkForMentions: false,
     }
 
@@ -311,7 +313,7 @@ Sorry, I didn't manage to scan this OD :/
 
             console.error(err);
             try {
-              await apologize(submission);
+              await this.apologize(submission);
             } catch (err) {
               console.error(`Failed to apologize:`, err)
             }
@@ -390,12 +392,83 @@ Sorry, I didn't manage to scan this OD :/
 
   }
 
-  sleep(ms) {
-    return new Promise((resolve, reject) => {
-      setTimeout(resolve, ms);
-    })
+  //TODO implement PM scanning and activate
+  async checkForPMs() {
+
+    console.log('checking inbox for PMs...');
+    this.running.checkPMs = true;
+    let success = 0;
+    let failed = 0;
+
+    try {
+
+      let pms = []
+      try {
+
+        pms = (await this.client.getInbox({
+          filter: `messages`
+        }))
+
+      } catch (err) {
+        console.error(`Couldn't load PMs, seems like there aren't any?:`, err)
+      }
+
+      // only include new PMs (not dealt with by the bot)
+      pms = pms.filter(message => {
+        return !this.oldPMs.includes(message.id);
+      })
+      // remember all new PMs
+      pms.forEach(message => {
+        this.oldPMs.push(message.id);
+      })
+      
+      // filter out stale PMs
+      pms = pms.filter(message => {
+        return message.created_utc*1000 >= Date.now()-this.invocationsStaleTimeout*1000;
+      })
+      
+      if (pms.length > 0) {
+        console.log(`pms:`, pms);
+      }
+
+      for (let message of unrepliedInvocations) {
+
+        message = await (await this.client.getMessage(message.id)).fetch() // reload the comment because a message fetched via the inbox *might be* missing some fields
+
+        try {
+
+          await this.scanAndComment(submission, message)
+          console.log(`commented successfully!`)
+
+        } catch (err) {
+
+          if (err.includes(`DELETED_COMMENT`)) {
+            console.warn(`Invoking comment was deleted by the user!`)  
+          } else {
+
+            console.error(`failed to reply with scan result:`, err)
+
+            try {
+              await this.apologize(message)
+            } catch (err) {
+              console.error(`Failed to apologize:`, err)
+            }
+
+          }
+
+          
+        }
+
+      }
+
+    } catch (err) {
+      console.error(`an error occurred checking for mentions:`, err);
+    } finally {
+      this.running.checkPMs = false;
+    }
+
   }
-  
+
   async checkForMentions() {
 
     // console.log('checking inbox for mentions...');
@@ -432,7 +505,7 @@ Sorry, I didn't manage to scan this OD :/
       
       // filter out stale comments
       mentions = mentions.filter(comment => {
-        return comment.created_utc*1000 >= Date.now()-this.invokationsStaleTimeout*1000;
+        return comment.created_utc*1000 >= Date.now()-this.invocationsStaleTimeout*1000;
       })
       
       let unrepliedInvocations = [];
@@ -467,20 +540,27 @@ Sorry, I didn't manage to scan this OD :/
 
         } catch (err) {
 
-          console.error(`failed to reply with scan result:`, err)
+          if (err.includes(`DELETED_COMMENT`)) {
+            console.warn(`Invoking comment was deleted by the user!`)  
+          } else {
 
-          try {
-            await apologize(comment)
-          } catch (err) {
-            console.error(`Failed to apologize:`, err)
+            console.error(`failed to reply with scan result:`, err)
+
+            try {
+              await this.apologize(comment)
+            } catch (err) {
+              console.error(`Failed to apologize:`, err)
+            }
+
           }
+
           
         }
 
       }
 
     } catch (err) {
-      console.error(`an error occured checking for mentions:`, err);
+      console.error(`an error occurred checking for mentions:`, err);
     } finally {
       this.running.checkForMentions = false;
     }
@@ -496,6 +576,12 @@ Sorry, I didn't manage to scan this OD :/
     await comment.edit(this.generateComment(scanResults, this.devLink, this.feedbackLink));
     console.log('updated link on ', 'https://reddit.com/' + submission.id);
 
+  }
+
+  sleep(ms) {
+    return new Promise((resolve, reject) => {
+      setTimeout(resolve, ms);
+    })
   }
 
 }
