@@ -276,6 +276,8 @@ I'm a bot, beep, boop!
 
   async apologize(submissionOrComment, reason) {
 
+    await this.sleep(1000*10) // wait 10 seconds to (hopefully) prevent rate limiting
+
     let reply = await submissionOrComment.reply(`
 Sorry, I didn't manage to scan this OD :/
 
@@ -544,6 +546,14 @@ ${reason ? `(Reason: ${reason})` : ``}
 
           if (err.message.includes(`DELETED_COMMENT`)) {
             console.warn(`Invoking comment was deleted by the user!`)  
+          } else if (err.message.includes(`RATELIMIT`)) {
+
+            let match = err.message.match(/Take a break for (\d+) seconds/)
+            if (match.length > 1) {
+              console.warn(`Ratelimited for ${match[1]} seconds!`)
+              await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
+            }
+
           } else {
 
             console.error(`failed to reply with scan result:`, err)
