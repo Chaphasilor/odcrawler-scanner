@@ -1,4 +1,9 @@
 require('dotenv').config();
+const betterLogging = require(`better-logging`)
+betterLogging(console, {
+  messageConstructionStrategy: betterLogging.MessageConstructionStrategy.FIRST,
+})
+console.logLevel = process.env.environment === `development` ? 4 : 3
 const Bot = require('./bot');
 const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
@@ -55,7 +60,7 @@ const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
       mentionsIntervall: process.env.REDDIT_POLLING_MENTIONS,
     });
 
-    console.log(`Bot is now running!`);
+    console.info(`Bot is now running!`);
 
   } catch (err) {
     console.error(`Couldn't start the bot: ${err}`);

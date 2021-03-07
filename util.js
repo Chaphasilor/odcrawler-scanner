@@ -1,29 +1,47 @@
 const fs = require(`fs`);
+const { createGzip } = require('zlib');
+const pipe = require(`util`).promisify(require(`stream`).pipeline);
 const markdownLinkExtractor = require('markdown-link-extractor');
 const fetch = require(`node-fetch`);
 const FormData = require(`form-data`);
 
-const OpenDirectoryDownloader = require(`./open-directory-downloader`);
+const OpenDirectoryDownloader = require(`open-directory-downloader`);
 
 const odd = new OpenDirectoryDownloader();
 
 module.exports.scanUrls = async function scanUrls(urls) {
 
-  let scanResults = [];
+  let scanResults = {
+    successful: [],
+    failed: [],
+  };
 
   for (let url of urls) {
 
+    console.info(`Starting scan of '${url}'...`)
     try {
-      scanResults.push(await odd.scanUrl(url, true));
+      scanResults.successful.push(await odd.scanUrl(url, {
+        keepJsonFile: true,
+        performSpeedtest: true,
+        uploadUrlFile: true,
+      }));
     } catch (err) {
-      console.warn(`Failed to scan OD:`, err);
+      console.warn(`Failed to scan '${url}':`, err);
+      scanResults.failed.push({
+        url,
+        reason: err.message,
+      })
     }
     
   }
 
-  scanResults.forEach(result => saveScanResults(result.scanFile, result.scannedUrl));
+  scanResults.successful.forEach(result => saveScanResults(result.jsonFile, result.scannedUrl));
 
   console.log(`scanResults:`, scanResults);
+
+  if (scanResults.successful.length <= 0 && urls.length > 0) {
+    throw new Error(`OpenDirectoryDownloader couldn't scan any of the provided ODs`)
+  }
 
   return scanResults;
   
@@ -46,6 +64,8 @@ module.exports.urlsFromText = function urlsFromText(text) {
 
 module.exports.extractUrls = async function extractUrls(submissionOrComment, isComment = false) {
 
+  const excludedDomains = JSON.parse(process.env.DOMAINS_EXCLUDED_FROM_SCANNING)
+
   let matches;
   
   if (isComment) {
@@ -67,12 +87,31 @@ module.exports.extractUrls = async function extractUrls(submissionOrComment, isC
     }
     
   }
+
+  matches = matches.filter(url => {
+    return !excludedDomains.includes(new URL(url).hostname)
+  })
   
   return matches;
   
 }
 
-function saveScanResults(scanPath, scannedUrl) {
+async function saveScanResults(scanPath, scannedUrl) {
+
+  let fileToUpload
+  try {
+    
+    fileToUpload = await compressFile(scanPath)
+    if (scanPath !== fileToUpload) {
+      fs.unlinkSync(scanPath)
+    }
+    
+  } catch (err) {
+
+    console.warn(`Couldn't compress file '${scanPath}':`, err)
+    fileToUpload = scanPath
+
+  }
 
   try {
 
@@ -82,7 +121,7 @@ function saveScanResults(scanPath, scannedUrl) {
 
     db.push({
       scannedUrl,
-      pathToScanFile: scanPath,
+      pathToScanFile: fileToUpload,
     })
 
     fs.writeFileSync(process.env.DB_FILE_PATH, JSON.stringify(db))
@@ -99,7 +138,7 @@ async function checkDiscoveryServerReachable() {
 
   while (true) {
 
-    console.log(`Checking if discovery server is reachable...`);
+    console.debug(`Checking if discovery server is reachable...`);
 
     let res = await fetch(process.env.ODCRAWLER_DISCOVERY_ENDPOINT, {
       method: `head`,
@@ -107,16 +146,16 @@ async function checkDiscoveryServerReachable() {
   
     if (res.ok) {
 
-      console.log(`Discovery server is online!`);
+      console.debug(`Discovery server is online!`);
       await tryToUploadScansFromDB()
 
     } else {
-      console.log(`Discovery server appears to be offline.`);
+      console.warn(`Discovery server appears to be offline.`);
     }
   
     let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
 
-    console.log(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
+    console.debug(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
     await sleep(sleepMinutes*60*1000)
 
   }
@@ -126,7 +165,7 @@ module.exports.checkDiscoveryServerReachable = checkDiscoveryServerReachable
 
 async function tryToUploadScansFromDB() {
 
-  console.log(`Trying to upload saved scans to the discovery server...`)
+  console.debug(`Trying to upload saved scans to the discovery server...`)
   
   try {
     
@@ -137,7 +176,7 @@ async function tryToUploadScansFromDB() {
     let failed = []
 
     if (db.length == 0) {
-      console.log(`No scans left to upload!`)
+      console.debug(`No scans left to upload!`)
       return
     }
     
@@ -145,9 +184,15 @@ async function tryToUploadScansFromDB() {
 
       try {
         
-        await uploadScan(scanResult.pathToScanFile)
-        fs.unlinkSync(scanResult.pathToScanFile)
-        console.log(`Scan file deleted!`)
+        if (fs.existsSync(scanResult.pathToScanFile)) {
+
+          await uploadScan(scanResult.pathToScanFile)
+          fs.unlinkSync(scanResult.pathToScanFile)
+          console.log(`Scan file deleted!`)
+
+        } else {
+          console.warn(`Scan file doesn't exist anymore, removing from DB...`)
+        }
         
       } catch (err) {
 
@@ -179,6 +224,8 @@ async function uploadScan(scanPath) {
       Authorization: 'Basic ' + Buffer.from(process.env.ODCRAWLER_DISCOVERY_UPLOAD_USERNAME + ":" + process.env.ODCRAWLER_DISCOVERY_UPLOAD_PASSWORD).toString('base64'),
     },
     body: form,
+    timeout: 0,
+    compress: true,
   });
 
   let jsonResponse;
@@ -194,6 +241,24 @@ async function uploadScan(scanPath) {
     throw new Error(`Failed to upload scan: ${jsonResponse.error}`)
   }
 
+}
+
+/**
+ * Compresses a file using gzip
+ * @param {String} input The path to the input file
+ * @param {String} [output] The path to the output file. Can't exist yet.
+ * @returns {String} The path to the output file
+ */
+async function compressFile(input, output) {
+  
+  const outputName = output || `${input}.gz`;
+  const gzip = createGzip();
+  const source = fs.createReadStream(input);
+  const destination = fs.createWriteStream(outputName);
+  await pipe(source, gzip, destination);
+
+  return outputName
+  
 }
 
 function sleep(ms) {

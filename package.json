@@ -14,10 +14,12 @@
   "author": "Chaphasilor",
   "license": "GPL-3.0",
   "dependencies": {
+    "better-logging": "^4.4.1",
     "dotenv": "^8.2.0",
     "form-data": "^3.0.0",
     "markdown-link-extractor": "^1.2.6",
     "node-fetch": "^2.6.1",
+    "open-directory-downloader": "^2.0.0",
     "request": "^2.88.0",
     "snoowrap": "^1.22.0"
   },
