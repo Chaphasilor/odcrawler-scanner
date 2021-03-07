@@ -11,27 +11,35 @@ const odd = new OpenDirectoryDownloader();
 
 module.exports.scanUrls = async function scanUrls(urls) {
 
-  let scanResults = [];
+  let scanResults = {
+    successful: [],
+    failed: [],
+  };
 
   for (let url of urls) {
 
+    console.info(`Starting scan of '${url}'...`)
     try {
-      scanResults.push(await odd.scanUrl(url, {
+      scanResults.successful.push(await odd.scanUrl(url, {
         keepJsonFile: true,
         performSpeedtest: true,
         uploadUrlFile: true,
       }));
     } catch (err) {
-      console.warn(`Failed to scan OD:`, err);
+      console.warn(`Failed to scan '${url}':`, err);
+      scanResults.failed.push({
+        url,
+        reason: err.message,
+      })
     }
     
   }
 
-  scanResults.forEach(result => saveScanResults(result.jsonFile, result.scannedUrl));
+  scanResults.successful.forEach(result => saveScanResults(result.jsonFile, result.scannedUrl));
 
   console.log(`scanResults:`, scanResults);
 
-  if (scanResults.length <= 0 && urls.length > 0) {
+  if (scanResults.successful.length <= 0 && urls.length > 0) {
     throw new Error(`OpenDirectoryDownloader couldn't scan any of the provided ODs`)
   }
 
@@ -56,6 +64,8 @@ module.exports.urlsFromText = function urlsFromText(text) {
 
 module.exports.extractUrls = async function extractUrls(submissionOrComment, isComment = false) {
 
+  const excludedDomains = JSON.parse(process.env.DOMAINS_EXCLUDED_FROM_SCANNING)
+
   let matches;
   
   if (isComment) {
@@ -77,6 +87,10 @@ module.exports.extractUrls = async function extractUrls(submissionOrComment, isC
     }
     
   }
+
+  matches = matches.filter(url => {
+    return !excludedDomains.includes(new URL(url).hostname)
+  })
   
   return matches;
   

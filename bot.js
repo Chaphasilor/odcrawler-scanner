@@ -183,18 +183,21 @@ module.exports = class Bot {
 
   generateComment(scanResults, originalUrls, devLink, feedbackLink) {
 
-    let failedUrls = originalUrls.filter(url => !scanResults.find(x => x.scannedUrl === url))
     let failedString = `  \n`
     
-    if (failedUrls.length > 0) {
-      failedString = `  \nWhoops, I failed to scan the following URLs:  \n`
-      for (const url of failedUrls) {
-        failedString += `${url}  \n`
+    if (scanResults.failed.length > 0) {
+      failedString = `  \n
+Whoops, I failed to scan the following URLs:  \n
+|URL|Reason|
+|---|------|
+`
+      for (const { url, reason } of scanResults.failed) {
+        failedString += `|${url}|${reason}|\n`
       }
       failedString += `\nI swear I really tried [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)  \n`
     }
     
-    let tables = scanResults.reduce((tableString, cur)=> {
+    let tables = scanResults.successful.reduce((tableString, cur)=> {
       return `${tableString}\n${cur.reddit}`;
     }, ``);
 
@@ -202,7 +205,7 @@ module.exports = class Bot {
 Here are the scan results:  
 
 ${tables}  
-${scanResults[0].credits}
+${scanResults.successful[0].credits}
 ${failedString}
 ---
 
@@ -235,7 +238,10 @@ I'm a bot, beep, boop!
     
     console.log(`odUrls:`, odUrls);
 
-    let scanResults = [];
+    let scanResults = {
+      successful: [],
+      failed: [],
+    };
 
     try {
       
