@@ -5,9 +5,9 @@ const markdownLinkExtractor = require('markdown-link-extractor');
 const fetch = require(`node-fetch`);
 const FormData = require(`form-data`);
 
-const OpenDirectoryDownloader = require(`open-directory-downloader`);
+const odd = require(`open-directory-downloader`);
 
-const odd = new OpenDirectoryDownloader();
+const indexer = new odd.OpenDirectoryDownloader();
 
 module.exports.scanUrls = async function scanUrls(urls) {
 
@@ -20,7 +20,7 @@ module.exports.scanUrls = async function scanUrls(urls) {
 
     console.info(`Starting scan of '${url}'...`)
     try {
-      scanResults.successful.push(await odd.scanUrl(url, {
+      scanResults.successful.push(await indexer.scanUrl(url, {
         keepJsonFile: true,
         performSpeedtest: true,
         uploadUrlFile: true,
@@ -29,7 +29,7 @@ module.exports.scanUrls = async function scanUrls(urls) {
       console.warn(`Failed to scan '${url}':`, err);
       scanResults.failed.push({
         url,
-        reason: err.message,
+        reason: err instanceof odd.ODDError ? err.message : `Internal Error`,
       })
     }
     
@@ -39,8 +39,8 @@ module.exports.scanUrls = async function scanUrls(urls) {
 
   console.log(`scanResults:`, scanResults);
 
-  if (scanResults.successful.length <= 0 && urls.length > 0) {
-    throw new Error(`OpenDirectoryDownloader couldn't scan any of the provided ODs`)
+  if (scanResults.successful.length === 0 && urls.length > 0) {
+    throw new Error(scanResults.failed.length === 1 ? scanResults.failed[0].reason : `Couldn't scan any of the provided ODs`)
   }
 
   return scanResults;

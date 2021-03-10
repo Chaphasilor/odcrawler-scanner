@@ -20,8 +20,8 @@ module.exports = class Bot {
     this.client = new Snoowrap(clientOptions);
     this.username = clientOptions.username;
     this.subsToMonitor = Object.values(this.toScrape).reduce((allSubs, sorting) => [...allSubs, ...sorting], []);
-    this.devLink = 'https://www.reddit.com/message/compose?to=Chaphasilor&subject=[DEV]';
-    this.feedbackLink = 'https://www.reddit.com/message/compose?to=Chaphasilor&subject=[FEEDBACK]';
+    this.devLink = 'https://www.reddit.com/message/compose?to=Chaphasilor&subject=[ODScanner-Contact]';
+    this.feedbackLink = 'https://www.reddit.com/message/compose?to=Chaphasilor&subject=[ODScanner-Feedback]';
     this.running = {
       refreshSubmissions: false,
       checkInbox: false,
@@ -201,7 +201,7 @@ Whoops, I failed to scan the following URLs:  \n
       return `${tableString}\n${cur.reddit}`;
     }, ``);
 
-    return `
+    return `\
 Here are the scan results:  
 
 ${tables}  
