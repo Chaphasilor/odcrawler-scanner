@@ -1,6 +1,7 @@
 require('dotenv').config();
 const betterLogging = require(`better-logging`)
 betterLogging(console, {
+  // format: process.env.environment !== `production` ? undefined : ctx => `${ctx.STAMP(new Date().toISOString().slice(0, 19).replace(`T`, `_`))} ${ctx.type} ${ctx.msg}`,
   messageConstructionStrategy: betterLogging.MessageConstructionStrategy.FIRST,
 })
 console.logLevel = process.env.environment === `development` ? 4 : 3

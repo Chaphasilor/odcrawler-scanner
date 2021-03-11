@@ -24,6 +24,9 @@ module.exports.scanUrls = async function scanUrls(urls) {
         keepJsonFile: true,
         performSpeedtest: true,
         uploadUrlFile: true,
+        fastScan: true,
+        threads: 4,
+        timeout: 30,
       }));
     } catch (err) {
       console.warn(`Failed to scan '${url}':`, err);

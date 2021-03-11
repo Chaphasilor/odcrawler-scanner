@@ -195,7 +195,7 @@ Whoops, I failed to scan the following URLs:  \n
     }
     
     let tables = scanResults.successful.reduce((tableString, cur)=> {
-      return `${tableString}\n${cur.reddit}`;
+      return `${tableString}\n${cur.reddit}${cur.missingFileSizes ? `^(File sizes are not included because the scan might take a long time. Reply \`!size\` to start a low-priority scan including file sizes (could take a few hours\))` : ``}\n`;
     }, ``);
 
     return `\
