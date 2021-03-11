@@ -1,16 +1,11 @@
 require('dotenv').config();
+const betterLogging = require(`better-logging`)
+betterLogging(console, {
+  messageConstructionStrategy: betterLogging.MessageConstructionStrategy.FIRST,
+})
+console.logLevel = process.env.environment === `development` ? 4 : 3
 const Bot = require('./bot');
-const { getUrl } = require('./util');
-const http = require('http');
-
-let port = process.env.PORT != undefined ? process.env.PORT : 6969;
-
-http.createServer((req, res) => {
-
-  res.write('Online!');
-  res.end();
-  
-}).listen(port);
+const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
 (async () => {
 
@@ -23,6 +18,7 @@ http.createServer((req, res) => {
 
   let toScrape;
   let blacklistedUsers;
+  let staleTimeout;
 
   try {
     toScrape = JSON.parse(process.env.REDDIT_SUBS_TO_SCRAPE);
@@ -38,6 +34,13 @@ http.createServer((req, res) => {
     blacklistedUsers = [];
   }
 
+  try {
+    staleTimeout = JSON.parse(process.env.REDDIT_CONSIDER_INVOCATION_STALE);
+  } catch (err) {
+    console.error('failed to load stale timeout from environment variable!');
+    staleTimeout = 3600;
+  }
+
   let clientOptions = {
     userAgent: process.env.REDDIT_USER_AGENT,
     clientId: process.env.REDDIT_CLIENT_ID,
@@ -47,7 +50,7 @@ http.createServer((req, res) => {
   };
 
 
-  const redditBot = new Bot(toScrape, praises, clientOptions, blacklistedUsers);
+  const redditBot = new Bot(toScrape, praises, clientOptions, blacklistedUsers, staleTimeout);
 
   try {
 
@@ -57,14 +60,12 @@ http.createServer((req, res) => {
       mentionsIntervall: process.env.REDDIT_POLLING_MENTIONS,
     });
 
+    console.info(`Bot is now running!`);
+
   } catch (err) {
     console.error(`Couldn't start the bot: ${err}`);
   }
 
 })();
 
-function sleep(ms) {
-  return new Promise((resolve, reject) => {
-    setTimeout(resolve, ms);
-  })
-}
+checkDiscoveryServerReachable()
