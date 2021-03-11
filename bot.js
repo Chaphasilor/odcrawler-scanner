@@ -1,8 +1,5 @@
 const Snoowrap = require('snoowrap');
-const qs = require('querystring');
-const request = require('request');
-const { scanUrls, extractUrls, submitScanResults, FiniteArray } = require('./util');
-const { SSL_OP_EPHEMERAL_RSA } = require('constants');
+const { scanUrls, extractUrls } = require('./util');
 
 module.exports = class Bot {
 
