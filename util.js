@@ -4,8 +4,9 @@ const pipe = require(`util`).promisify(require(`stream`).pipeline);
 const markdownLinkExtractor = require('markdown-link-extractor');
 const fetch = require(`node-fetch`);
 const FormData = require(`form-data`);
-
 const odd = require(`open-directory-downloader`);
+
+const { ScanError } = require(`./errors`)
 
 const indexer = new odd.OpenDirectoryDownloader();
 
@@ -32,7 +33,9 @@ module.exports.scanUrls = async function scanUrls(urls) {
       console.warn(`Failed to scan '${url}':`, err);
       scanResults.failed.push({
         url,
-        reason: err instanceof odd.ODDError ? err.message : `Internal Error`,
+        reason: err instanceof odd.ODDError ? err.message : `Internal Error`, // TODO once Google Drive errors are supported in `open-directory-downloader`, detect them (via string matching) and provide an appropriate error message
+        reddit: err[1]?.reddit,
+        missingFileSizes: err[1]?.missingFileSizes
       })
     }
     
@@ -40,10 +43,10 @@ module.exports.scanUrls = async function scanUrls(urls) {
 
   scanResults.successful.forEach(result => saveScanResults(result.jsonFile, result.scannedUrl));
 
-  console.log(`scanResults:`, scanResults);
+  console.debug(`scanResults:`, scanResults);
 
   if (scanResults.successful.length === 0 && urls.length > 0) {
-    throw new Error(scanResults.failed.length === 1 ? scanResults.failed[0].reason : `Couldn't scan any of the provided ODs`)
+    throw new ScanError(scanResults.failed.length === 1 ? scanResults.failed[0].reason : `Couldn't scan any of the provided ODs`)
   }
 
   return scanResults;

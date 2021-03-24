@@ -1,5 +1,6 @@
 const Snoowrap = require('snoowrap');
 const { scanUrls, extractUrls } = require('./util');
+const { ScanError } = require(`./errors`)
 
 module.exports = class Bot {
 
@@ -180,18 +181,32 @@ module.exports = class Bot {
 
   generateComment(scanResults, originalUrls, devLink, feedbackLink) {
 
+    let completelyFailed = scanResults.failed.filter(x => x.reddit == undefined)
+    let partiallyFailed = scanResults.failed.filter(x => x.reddit != undefined)
+    
     let failedString = `  \n`
     
-    if (scanResults.failed.length > 0) {
+    if (partiallyFailed.length > 0) {
       failedString = `  \n
-Whoops, I failed to scan the following URLs:  \n
+*I encountered issues scanning the following URLs, but still managed to scan them*:  \n`
+      let partiallyFailedTable = partiallyFailed.reduce((tableString, cur) => {
+        return `  \n${tableString}\n${cur.reddit}${cur.missingFileSizes ? `^(File sizes are not included because the scan might take a long time. Reply \`!size\` to start a low-priority scan including file sizes (could take a few hours\))  \n` : ``}(Error cause: ${cur.reason})  \n`;
+      }, ``);
+
+      failedString += partiallyFailedTable
+      
+    }
+    
+    if (completelyFailed.length > 0) {
+      failedString = `  \n
+*Whoops, I failed to scan the following URLs*:  \n
 |URL|Reason|
 |---|------|
 `
       for (const { url, reason } of scanResults.failed) {
         failedString += `|${url}|${reason}|\n`
       }
-      failedString += `\nI swear I really tried [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)  \n`
+      failedString += `\n*I swear I really tried* [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)  \n`
     }
     
     let tables = scanResults.successful.reduce((tableString, cur)=> {
@@ -199,14 +214,15 @@ Whoops, I failed to scan the following URLs:  \n
     }, ``);
 
     return `\
-Here are the scan results:  
+*Here are the scan results*:  
 
 ${tables}  
-${scanResults.successful[0].credits}
 ${failedString}
+${scanResults.successful[0].credits}  
+
 ---
 
-I'm a bot, beep, boop!
+*I'm a bot, beep, boop!*
 
 ^([Contact Developer](${devLink}) | [Give Feedback](${feedbackLink}))
     `;
@@ -284,7 +300,7 @@ I'm a bot, beep, boop!
     let reply = await submissionOrComment.reply(`
 Sorry, I didn't manage to scan this OD :/
 
-[ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)
+I swear I really tried [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)
 
 ${reason ? `(Reason: ${reason})` : ``}
     `);
@@ -455,10 +471,22 @@ ${reason ? `(Reason: ${reason})` : ``}
 
             console.error(`failed to reply with scan result:`, err)
 
-            try {
-              await this.apologize(message, err.message)
-            } catch (err) {
-              console.error(`Failed to apologize:`, err)
+            if (err instanceof ScanError) {
+
+              try {
+                await this.apologize(message, err.message)
+              } catch (err) {
+                console.error(`Failed to apologize:`, err)
+              }
+              
+            } else {
+
+              try {
+                await this.apologize(message, `Something went really wrong. /u/Chaphasilor please help o.O`)
+              } catch (err) {
+                console.error(`Failed to apologize:`, err)
+              }
+              
             }
 
           }
@@ -561,10 +589,22 @@ ${reason ? `(Reason: ${reason})` : ``}
 
             console.error(`failed to reply with scan result:`, err)
 
-            try {
-              await this.apologize(comment, err.message)
-            } catch (err) {
-              console.error(`Failed to apologize:`, err)
+            if (err instanceof ScanError) {
+
+              try {
+                await this.apologize(comment, err.message)
+              } catch (err) {
+                console.error(`Failed to apologize:`, err)
+              }
+              
+            } else {
+
+              try {
+                await this.apologize(comment, `Something went really wrong. /u/Chaphasilor please help o.O`)
+              } catch (err) {
+                console.error(`Failed to apologize:`, err)
+              }
+              
             }
 
           }
