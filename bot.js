@@ -1,6 +1,6 @@
 const Snoowrap = require('snoowrap');
 const { scanUrls, extractUrls } = require('./util');
-const { ScanError } = require(`./errors`)
+const { ScanError, MissingODError } = require(`./errors`)
 
 module.exports = class Bot {
 
@@ -251,6 +251,10 @@ ${scanResults.successful[0].credits}
     
     console.log(`odUrls:`, odUrls);
 
+    if (!odUrls || odUrls.length === 0) {
+      throw new MissingODError(`No OD URLs found`)
+    }
+
     let scanResults = {
       successful: [],
       failed: [],
@@ -308,6 +312,17 @@ ${reason ? `(Reason: ${reason})` : ``}
     
   }
 
+  async replyMissingOD(submissionOrComment, reason) {
+
+    await this.sleep(1000*10) // wait 10 seconds to (hopefully) prevent rate limiting
+
+    let reply = await submissionOrComment.reply(`
+Sorry, I couldn't find any OD URLs in both the post or your comment  :/
+    `);
+    console.log(`replied to ${submissionOrComment.id} about missing OD URLs`);
+    
+  }
+
   async refreshSubmissions() {
 
     console.log('refreshing submissions...');
@@ -334,11 +349,38 @@ ${reason ? `(Reason: ${reason})` : ``}
 
           } catch (err) {
 
-            console.error(err);
-            try {
-              await this.apologize(submission);
-            } catch (err) {
-              console.error(`Failed to apologize:`, err)
+            if (err.message.includes(`DELETED_SUBMISSION`)) { //TODO not sure if this exists for submissions
+              console.warn(`Submission was deleted by the user!`)  
+            } else {
+  
+              console.error(`failed to reply with scan result:`, err)
+  
+              if (err instanceof ScanError) {
+  
+                try {
+                  await this.apologize(submission, err.message)
+                } catch (err) {
+                  console.error(`Failed to apologize:`, err)
+                }
+                
+              } else if (err instanceof MissingODError) {
+  
+                try {
+                  await this.replyMissingOD(submission, err.message)
+                } catch (err) {
+                  console.error(`Failed to reply about missing ODs:`, err)
+                }
+  
+              } else {
+  
+                try {
+                  await this.apologize(submission, `Something went really wrong. /u/Chaphasilor please help o.O`)
+                } catch (err) {
+                  console.error(`Failed to apologize:`, err)
+                }
+                
+              }
+  
             }
             
           }
@@ -479,6 +521,14 @@ ${reason ? `(Reason: ${reason})` : ``}
                 console.error(`Failed to apologize:`, err)
               }
               
+            } else if (err instanceof MissingODError) {
+
+              try {
+                await this.replyMissingOD(message, err.message)
+              } catch (err) {
+                console.error(`Failed to reply about missing ODs:`, err)
+              }
+
             } else {
 
               try {
@@ -597,6 +647,14 @@ ${reason ? `(Reason: ${reason})` : ``}
                 console.error(`Failed to apologize:`, err)
               }
               
+            } else if (err instanceof MissingODError) {
+
+              try {
+                await this.replyMissingOD(comment, err.message)
+              } catch (err) {
+                console.error(`Failed to reply about missing ODs:`, err)
+              }
+
             } else {
 
               try {

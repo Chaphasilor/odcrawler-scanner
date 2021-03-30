@@ -13,6 +13,22 @@ class ScanError extends Error {
   }
 }
 
+class MissingODError extends Error {
+  constructor(message, ...extras) {
+
+    super()
+
+    Error.captureStackTrace(this, this.constructor)
+    this.name = 'MissingODError'
+    this.message = message
+    if (extras) {
+      this.extras = extras
+    }
+
+  }
+}
+
 module.exports = {
   ScanError,
+  MissingODError,
 }
