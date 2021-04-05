@@ -33,7 +33,7 @@ module.exports.scanUrls = async function scanUrls(urls) {
       console.warn(`Failed to scan '${url}':`, err);
       scanResults.failed.push({
         url,
-        reason: err instanceof odd.ODDError ? err.message : `Internal Error`, // TODO once Google Drive errors are supported in `open-directory-downloader`, detect them (via string matching) and provide an appropriate error message
+        reason: err[0] instanceof odd.ODDError ? err[0].message : `Internal Error`, // TODO once Google Drive errors are supported in `open-directory-downloader`, detect them (via string matching) and provide an appropriate error message
         reddit: err[1]?.reddit,
         missingFileSizes: err[1]?.missingFileSizes
       })
