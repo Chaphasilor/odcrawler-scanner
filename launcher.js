@@ -59,6 +59,7 @@ const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
       submissionsIntervall: process.env.REDDIT_POLLING_SUBMISSIONS,
       inboxIntervall: process.env.REDDIT_POLLING_INBOX,
       mentionsIntervall: process.env.REDDIT_POLLING_MENTIONS,
+      processQueueIntervall: process.env.REDDIT_POLLING_QUEUE,
     });
 
     console.info(`Bot is now running!`);

@@ -1,6 +1,7 @@
 const Snoowrap = require('snoowrap');
 const { scanUrls, extractUrls } = require('./util');
 const { ScanError, MissingODError } = require(`./errors`)
+const { sendPM } = require(`./pm`)
 
 module.exports = class Bot {
 
@@ -25,11 +26,14 @@ module.exports = class Bot {
       checkInbox: false,
       checkPMs: false,
       checkForMentions: false,
+      scanNextInQueue: false,
     }
+
+    this.scanQueue = []
 
   }
 
-  startPolling({ submissionsIntervall, inboxIntervall, mentionsIntervall }) {
+  startPolling({ submissionsIntervall, inboxIntervall, mentionsIntervall, processQueueIntervall }) {
 
     if (submissionsIntervall > 0) {
       this.pollSubmissions(submissionsIntervall);
@@ -39,6 +43,9 @@ module.exports = class Bot {
     }
     if (mentionsIntervall > 0) {
       this.pollMentions(mentionsIntervall);
+    }
+    if (processQueueIntervall > 0) {
+      this.processQueue(processQueueIntervall);
     }
 
   }
@@ -66,6 +73,15 @@ module.exports = class Bot {
     setInterval(() => {
       if (!this.running.checkForMentions) {
         this.checkForMentions();
+      }
+    }, seconds * 1000);
+  }
+
+  processQueue(seconds) {
+    this.scanNextInQueue();
+    setInterval(() => {
+      if (!this.running.scanNextInQueue) {
+        this.scanNextInQueue();
       }
     }, seconds * 1000);
   }
@@ -344,6 +360,7 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
 
           try {
 
+            //FIXME add to scan queue instead
             await this.scanAndComment(submission);
             count++;
 
@@ -618,56 +635,31 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
         // const submission = await this.client.getSubmission(comment.context.split(`/`)[4]);
         const submission = await this.client.getSubmission(comment.link_id);
   
-        try {
+        // add new mention to the queue
+        if (!this.scanQueue.find(x => x.submission.id === submission.id)) {
 
-          await this.scanAndComment(submission, comment)
-          console.log(`commented successfully!`)
+          let threadTitle = `Scan Request on ${(new Date()).toUTCString()}`
 
-        } catch (err) {
+          // only send the acknowledgement if there are other scans in the queue
+          if (this.scanQueue.length > 0 || this.running.scanNextInQueue) {
+            
+            let threadId = await sendPM(this.client, comment.author.name, threadTitle,
+`*I've received your request and added it to the queue :)*
 
-          if (err.message.includes(`DELETED_COMMENT`)) {
-            console.warn(`Invoking comment was deleted by the user!`)  
-          } else if (err.message.includes(`RATELIMIT`)) {
+*I will 
 
-            let match = err.message.match(/Take a break for (\d+) seconds/)
-            if (match.length > 1) {
-              console.warn(`Ratelimited for ${match[1]} seconds!`)
-              await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
-            }
-
-          } else {
-
-            console.error(`failed to reply with scan result:`, err)
-
-            if (err instanceof ScanError) {
-
-              try {
-                await this.apologize(comment, err.message)
-              } catch (err) {
-                console.error(`Failed to apologize:`, err)
-              }
-              
-            } else if (err instanceof MissingODError) {
-
-              try {
-                await this.replyMissingOD(comment, err.message)
-              } catch (err) {
-                console.error(`Failed to reply about missing ODs:`, err)
-              }
-
-            } else {
-
-              try {
-                await this.apologize(comment, `Something went really wrong. /u/Chaphasilor please help o.O`)
-              } catch (err) {
-                console.error(`Failed to apologize:`, err)
-              }
-              
-            }
+[Link to invoking comment](https://reddit.com/comments/${submission.id}/_/${comment.id})`
+            )
 
           }
-
           
+          
+          this.scanQueue.push({
+            submission,
+            comment,
+            threadTitle, 
+          })
+
         }
 
       }
@@ -680,16 +672,85 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
 
   }
 
-  async updateLink(comment, scanResults) {
+  async scanNextInQueue() {
 
-    let submission = await this.client.getSubmission(comment.parent_id);
-    submission.url = await submission.url;
-    submission.id = await submission.id;
+    if (this.scanQueue.length > 0) {
 
-    await comment.edit(this.generateComment(scanResults, this.devLink, this.feedbackLink));
-    console.log('updated link on ', 'https://reddit.com/' + submission.id);
+      this.running.scanNextInQueue = true
+
+      try {
+
+        // load scan job from the queue
+        const { submission, comment, threadTitle } = this.scanQueue.shift()
+
+        // await sendPM(this.client, comment.author.name, `re: ${threadTitle}`, `*I've started scanning the OD(s) you've requested a scan on!*`)
+        
+        await this.scanAndComment(submission, comment)
+        console.log(`commented successfully!`)
+
+      } catch (err) {
+
+        if (err.message.includes(`DELETED_COMMENT`)) {
+          console.warn(`Invoking comment was deleted by the user!`)  
+        } else if (err.message.includes(`RATELIMIT`)) {
+
+          let match = err.message.match(/Take a break for (\d+) seconds/)
+          if (match.length > 1) {
+            console.warn(`Ratelimited for ${match[1]} seconds!`)
+            await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
+          }
+
+        } else {
+
+          console.error(`failed to reply with scan result:`, err)
+
+          if (err instanceof ScanError) {
+
+            try {
+              await this.apologize(comment, err.message)
+            } catch (err) {
+              console.error(`Failed to apologize:`, err)
+            }
+            
+          } else if (err instanceof MissingODError) {
+
+            try {
+              await this.replyMissingOD(comment, err.message)
+            } catch (err) {
+              console.error(`Failed to reply about missing ODs:`, err)
+            }
+
+          } else {
+
+            try {
+              await this.apologize(comment, `Something went really wrong. /u/Chaphasilor please help o.O`)
+            } catch (err) {
+              console.error(`Failed to apologize:`, err)
+            }
+            
+          }
+
+        }
+
+        
+      }
+
+      this.running.scanNextInQueue = false
+      
+    }
 
   }
+
+  // async updateLink(comment, scanResults) {
+
+  //   let submission = await this.client.getSubmission(comment.parent_id);
+  //   submission.url = await submission.url;
+  //   submission.id = await submission.id;
+
+  //   await comment.edit(this.generateComment(scanResults, this.devLink, this.feedbackLink));
+  //   console.log('updated link on ', 'https://reddit.com/' + submission.id);
+
+  // }
 
   sleep(ms) {
     return new Promise((resolve, reject) => {
