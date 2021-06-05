@@ -640,8 +640,9 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
 
           let threadTitle = `Scan Request on ${(new Date()).toUTCString()}`
 
-          // only send the acknowledgement if there are other scans in the queue
-          if (this.scanQueue.length > 0 || this.running.scanNextInQueue) {
+          // // only send the acknowledgement if there are other scans in the queue
+          //TODO this can only be uncommented if instead a pm is sent saying that the scan started
+          // if (this.scanQueue.length > 0 || this.running.scanNextInQueue) {
             
             let threadId = await sendPM(this.client, comment.author.name, threadTitle,
 `*I've received your request and added it to the queue :)*
@@ -651,7 +652,7 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
 [Link to invoking comment](https://reddit.com/comments/${submission.id}/_/${comment.id})`
             )
 
-          }
+          // }
           
           
           this.scanQueue.push({
