@@ -257,29 +257,33 @@ ${scanResults.successful[0].credits}
 
   }
 
+  async extractOdUrlsFromSubmissionOrComment(submission, comment) {
+
+    let odUrls = await extractUrls(comment, true);
+
+    if (odUrls.length > 0) {
+      console.log(`extracting ODs from *comment with custom urls* on '${submission.title}' (https://reddit.com/${submission.id})`);
+    } else {
+      console.log(`extracting ODs from '${submission.title}' (https://reddit.com/${submission.id})`);
+      odUrls = await extractUrls(submission);
+    }
+
+    console.log(`odUrls:`, odUrls);
+    return odUrls || []
+    
+  }
+  
   async scanAndComment(submission, comment) {
 
     submission = await submission.fetch();
 
-    let odUrls;
-    
     if (comment) {
       comment = await comment.fetch();
     }
-
-    odUrls = await extractUrls(comment, true);
-
-    if (odUrls.length > 0) {
-      console.log(`scanning *comment with custom urls* on '${submission.title}' (https://reddit.com/${submission.id})`);
-    } else {
-      console.log(`scanning '${submission.title}' (https://reddit.com/${submission.id})`);
-      odUrls = await extractUrls(submission);
-    }
-
     
-    console.log(`odUrls:`, odUrls);
+    let odUrls = await this.extractOdUrlsFromSubmissionOrComment(submission, comment)
 
-    if (!odUrls || odUrls.length === 0) {
+    if (odUrls.length === 0) {
       throw new MissingODError(`No OD URLs found`)
     }
 
@@ -601,7 +605,18 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
       }
 
     } catch (err) {
-      console.error(`an error occurred checking for mentions:`, err);
+      console.error(`an error occurred checking for PMs:`, err);
+
+      if (err.message.includes(`RATELIMIT`)) {
+
+        let match = err.message.match(/Take a break for (\d+) seconds/)
+        if (match.length > 1) {
+          console.warn(`Ratelimited for ${match[1]} seconds!`)
+          await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
+        }
+
+      }
+      
     } finally {
       this.running.checkPMs = false;
     }
@@ -673,7 +688,13 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
         const submission = await (await this.client.getSubmission(comment.link_id)).fetch();
   
         // add new mention to the queue
-        if (!this.scanQueue.find(x => x.submission.id === submission.id)) {
+        if (!this.scanQueue.find(x => {
+          if (comment) {
+            return x.comment.id === comment.id
+          } else {
+            x.submission.id === submission.id
+          }
+        })) {
 
           let threadTitle = `Scan Request on ${(new Date()).toUTCString()}`
 
@@ -681,8 +702,15 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
           //TODO this can only be uncommented if instead a pm is sent saying that the scan started
           // if (this.scanQueue.length > 0 || this.running.scanNextInQueue) {
             
-            let threadId = await sendPM(this.client, comment.author.name, threadTitle,
-`*I've received your request and added it to the queue :)*
+          let queueLength = this.scanQueue.length
+          let totalODs = await this.scanQueue.reduce(async (sum, queuedScan) => {
+            let odUrls = await this.extractOdUrlsFromSubmissionOrComment(queuedScan.submission, queuedScan.comment)
+            return (await sum) + odUrls.length //!!! `sum` is a promise
+          }, 0)
+          
+          let threadId = await sendPM(this.client, comment.author.name, threadTitle,
+`*I've received your request and added it to the queue :)*  
+There ${queueLength === 1 ? `is` : `are`} currently ${queueLength} other scan${queueLength === 1 ? `` : `s`} in the queue (${totalODs} OD${totalODs === 1 ? `` : `s`} in total).
 
 [Link to invoking comment](https://reddit.com/comments/${submission.id}/_/${comment.id})`
             )
@@ -701,7 +729,18 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
       }
 
     } catch (err) {
+
       console.error(`an error occurred checking for mentions:`, err);
+      if (err.message.includes(`RATELIMIT`)) {
+
+        let match = err.message.match(/Take a break for (\d+) seconds/)
+        if (match.length > 1) {
+          console.warn(`Ratelimited for ${match[1]} seconds!`)
+          await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
+        }
+
+      }
+
     } finally {
       this.running.checkForMentions = false;
     }
@@ -713,10 +752,11 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
     if (this.scanQueue.length > 0) {
 
       this.running.scanNextInQueue = true
-
       
       // load scan job from the queue
       const { submission, comment, threadTitle } = this.scanQueue.shift()
+
+      console.info(`${threadTitle} started!`)
       
       try {
         // await sendPM(this.client, comment.author.name, `re: ${threadTitle}`, `*I've started scanning the OD(s) you've requested a scan on!*`)
