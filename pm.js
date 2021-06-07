@@ -12,7 +12,7 @@ async function sendPM(client, recipient, threadTitle, body) {
     amount: 1,
   })[0]
 
-  console.log(`lastSentPM:`, lastSentPM)
+  // console.log(`lastSentPM:`, lastSentPM)
   return lastSentPM.id
   
 }

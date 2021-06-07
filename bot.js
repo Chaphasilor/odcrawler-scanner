@@ -310,6 +310,10 @@ ${scanResults.successful[0].credits}
 
     let lastReply;
     let commentArray = this.generateComment(scanResults, odUrls, this.devLink, this.feedbackLink)
+
+    if (commentArray.length > 1) {
+      console.warn(`Character limit exceeded! Splitting into multiple comments...`)
+    }
     
     // reply the first time
     if (comment) {
@@ -329,21 +333,17 @@ ${scanResults.successful[0].credits}
       console.log('approved comment');
     }
     
-    if (commentArray.length > 1) {
+    // create the remaining comments
+    for (const commentBody of commentArray) {
 
-      console.log(`Character limit exceeded!`)
-      for (const commentBody of commentArray) {
-
-        await this.sleep(5*1000)
-        lastReply = await lastReply.reply(commentBody);
-        console.log(`Extended reply on https://reddit.com/comments/${submission.id}/_/${comment.id}`)
-        
-        // approve reply if bot is a moderator with posts permission
-        if (mod.length > 0 && mod[0].mod_permissions.includes('posts')) {
-          await lastReply.approve();
-          console.log('approved comment');
-        }
-        
+      await this.sleep(5*1000)
+      lastReply = await lastReply.reply(commentBody);
+      console.log(`Extended reply on https://reddit.com/comments/${submission.id}/_/${comment.id}`)
+      
+      // approve reply if bot is a moderator with posts permission
+      if (mod.length > 0 && mod[0].mod_permissions.includes('posts')) {
+        await lastReply.approve();
+        console.log('approved comment');
       }
 
     }
@@ -670,7 +670,7 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
         comment = await (await this.client.getComment(comment.id)).fetch() // reload the comment because a comment fetched via the inbox is missing some fields (like link_id)
 
         // const submission = await this.client.getSubmission(comment.context.split(`/`)[4]);
-        const submission = await this.client.getSubmission(comment.link_id);
+        const submission = await (await this.client.getSubmission(comment.link_id)).fetch();
   
         // add new mention to the queue
         if (!this.scanQueue.find(x => x.submission.id === submission.id)) {
