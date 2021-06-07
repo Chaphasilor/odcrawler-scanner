@@ -707,10 +707,14 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
             let odUrls = await this.extractOdUrlsFromSubmissionOrComment(queuedScan.submission, queuedScan.comment)
             return (await sum) + odUrls.length //!!! `sum` is a promise
           }, 0)
+
+          
           
           let threadId = await sendPM(this.client, comment.author.name, threadTitle,
 `*I've received your request and added it to the queue :)*  
-There ${queueLength === 1 ? `is` : `are`} currently ${queueLength} other scan${queueLength === 1 ? `` : `s`} in the queue (${totalODs} OD${totalODs === 1 ? `` : `s`} in total).
+
+${this.running.scanNextInQueue ? `One scan is running right now.`: ``}  
+There ${queueLength === 1 ? `is` : `are`} currently ${queueLength} other scan${queueLength === 1 ? `` : `s`} in the queue (with ${totalODs} OD${totalODs === 1 ? `` : `s`} in total).
 
 [Link to invoking comment](https://reddit.com/comments/${submission.id}/_/${comment.id})`
             )
