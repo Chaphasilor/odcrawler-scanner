@@ -168,8 +168,8 @@ async function checkDiscoveryServerReachable() {
   
     let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
 
-    console.debug(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
-    await sleep(sleepMinutes*60*1000)
+    console.debug(`Waiting ${sleepMinutes} second${sleepMinutes > 1 ? `s` : ``} before trying again`)
+    await sleep(sleepMinutes*1000)
 
   }
   

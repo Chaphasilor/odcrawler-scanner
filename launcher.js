@@ -4,7 +4,7 @@ betterLogging(console, {
   format: process.env.environment !== `production` ? undefined : ctx => `${ctx.STAMP(new Date().toISOString().slice(0, 19).replace(`T`, `_`))} ${ctx.type} ${ctx.msg}`,
   messageConstructionStrategy: betterLogging.MessageConstructionStrategy.FIRST,
 })
-console.logLevel = process.env.environment === `development` ? 4 : 3
+console.logLevel = process.env.environment !== `production` ? 4 : 3
 const Bot = require('./bot');
 const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
@@ -70,4 +70,6 @@ const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
 })();
 
-checkDiscoveryServerReachable()
+if (process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY > 0) {
+  checkDiscoveryServerReachable()
+}
