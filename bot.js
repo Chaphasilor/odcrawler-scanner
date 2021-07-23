@@ -709,17 +709,19 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
           }, 0)
 
           
-          
-          let threadId = await sendPM(this.client, comment.author.name, threadTitle,
-`*I've received your request and added it to the queue :)*  
-
-${this.running.scanNextInQueue ? `One scan is running right now.`: ``}  
-There ${queueLength === 1 ? `is` : `are`} currently ${queueLength} other scan${queueLength === 1 ? `` : `s`} in the queue (with ${totalODs} OD${totalODs === 1 ? `` : `s`} in total).
-
-[Link to invoking comment](https://reddit.com/comments/${submission.id}/_/${comment.id})`
-            )
-
-          // }
+          let threadId
+          try {
+            threadId = await sendPM(this.client, comment.author.name, threadTitle,
+  `*I've received your request and added it to the queue :)*  
+  
+  ${this.running.scanNextInQueue ? `One scan is running right now.`: ``}  
+  There ${queueLength === 1 ? `is` : `are`} currently ${queueLength} other scan${queueLength === 1 ? `` : `s`} in the queue (with ${totalODs} OD${totalODs === 1 ? `` : `s`} in total).
+  
+  [Link to invoking comment](https://reddit.com/comments/${submission.id}/_/${comment.id})`
+              )
+          } catch (err) {
+            console.warn(`Error while sending PM:`, err)
+          }
           
           //TODO also save the time when the scan was added to the queue, can be used to decide whether or not to notify the user that the scan started (if the scan is likely to take a bit longer)
           this.scanQueue.push({

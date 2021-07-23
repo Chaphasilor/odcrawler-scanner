@@ -1,19 +1,32 @@
 const Snoowrap = require('snoowrap');
+const { PMsDisabledError } = require('./errors');
 
 async function sendPM(client, recipient, threadTitle, body) {
 
-  let result = await client.composeMessage({
-    to: recipient,
-    subject: threadTitle,
-    text: body,
-  })
+  try {
 
-  let lastSentPM = await client.getSentMessages({
-    amount: 1,
-  })[0]
+    let result = await client.composeMessage({
+      to: recipient,
+      subject: threadTitle,
+      text: body,
+    })
+    
+    let lastSentPM = await client.getSentMessages({
+      amount: 1,
+    })[0]
+    
+    // console.log(`lastSentPM:`, lastSentPM)
+    return lastSentPM.id
 
-  // console.log(`lastSentPM:`, lastSentPM)
-  return lastSentPM.id
+  } catch (err) {
+
+    if (err.message.includes(`NOT_WHITELISTED_BY_USER_MESSAGE`)) {
+      throw new PMsDisabledError(`User has disabled PMs from strangers, not sending the PM!`)
+    } else {
+      throw err
+    }
+
+  }
   
 }
 module.exports.sendPM = sendPM
