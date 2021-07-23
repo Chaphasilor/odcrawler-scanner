@@ -49,6 +49,10 @@ module.exports.scanUrls = async function scanUrls(urls) {
     throw new ScanError(scanResults.failed.length === 1 ? scanResults.failed[0].reason : `Couldn't scan any of the provided ODs`)
   }
 
+  if (scanResults.successful.length === 0 && urls.length > 0) {
+    throw new Error(scanResults.failed.length === 1 ? scanResults.failed[0].reason : `Couldn't scan any of the provided ODs`)
+  }
+
   return scanResults;
   
 }
