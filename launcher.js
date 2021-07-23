@@ -1,9 +1,10 @@
 require('dotenv').config();
 const betterLogging = require(`better-logging`)
 betterLogging(console, {
+  format: process.env.environment !== `production` ? undefined : ctx => `${ctx.STAMP(new Date().toISOString().slice(0, 19).replace(`T`, `_`))} ${ctx.type} ${ctx.msg}`,
   messageConstructionStrategy: betterLogging.MessageConstructionStrategy.FIRST,
 })
-console.logLevel = process.env.environment === `development` ? 4 : 3
+console.logLevel = process.env.environment !== `production` ? 4 : 3
 const Bot = require('./bot');
 const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
@@ -58,6 +59,7 @@ const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
       submissionsIntervall: process.env.REDDIT_POLLING_SUBMISSIONS,
       inboxIntervall: process.env.REDDIT_POLLING_INBOX,
       mentionsIntervall: process.env.REDDIT_POLLING_MENTIONS,
+      processQueueIntervall: process.env.REDDIT_POLLING_QUEUE,
     });
 
     console.info(`Bot is now running!`);
@@ -68,4 +70,6 @@ const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
 })();
 
-checkDiscoveryServerReachable()
+if (process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY > 0) {
+  checkDiscoveryServerReachable()
+}

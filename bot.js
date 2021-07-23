@@ -1,5 +1,7 @@
 const Snoowrap = require('snoowrap');
 const { scanUrls, extractUrls } = require('./util');
+const { ScanError, MissingODError } = require(`./errors`)
+const { sendPM } = require(`./pm`)
 
 module.exports = class Bot {
 
@@ -24,11 +26,14 @@ module.exports = class Bot {
       checkInbox: false,
       checkPMs: false,
       checkForMentions: false,
+      scanNextInQueue: false,
     }
+
+    this.scanQueue = []
 
   }
 
-  startPolling({ submissionsIntervall, inboxIntervall, mentionsIntervall }) {
+  startPolling({ submissionsIntervall, inboxIntervall, mentionsIntervall, processQueueIntervall }) {
 
     if (submissionsIntervall > 0) {
       this.pollSubmissions(submissionsIntervall);
@@ -38,6 +43,9 @@ module.exports = class Bot {
     }
     if (mentionsIntervall > 0) {
       this.pollMentions(mentionsIntervall);
+    }
+    if (processQueueIntervall > 0) {
+      this.processQueue(processQueueIntervall);
     }
 
   }
@@ -69,6 +77,15 @@ module.exports = class Bot {
     }, seconds * 1000);
   }
 
+  processQueue(seconds) {
+    this.scanNextInQueue();
+    setInterval(() => {
+      if (!this.running.scanNextInQueue) {
+        this.scanNextInQueue();
+      }
+    }, seconds * 1000);
+  }
+
   async alreadyCommentedSubmission(submission) {
     try {
       submission.comments = await submission.comments.fetchAll();
@@ -87,7 +104,7 @@ module.exports = class Bot {
   async loadSubmissions() {
 
     let allSubmissions = [];
-    
+
     for (let type of Object.keys(this.toScrape)) {
 
       for (let subredditName of this.toScrape[type]) {
@@ -116,7 +133,7 @@ module.exports = class Bot {
     }
 
     return allSubmissions;
-    
+
   }
 
   filterSubmissions(submissions) {
@@ -135,7 +152,7 @@ module.exports = class Bot {
 
     // only include submissions that are younger than 5 days
     filteredSubmissions = filteredSubmissions.filter(submission => {
-      let fiveDaysAgo = (Date.now() - 1000*60*60*24*5) / 1000; // created_utc is in seconds, not milliseconds
+      let fiveDaysAgo = (Date.now() - 1000 * 60 * 60 * 24 * 5) / 1000; // created_utc is in seconds, not milliseconds
       return submission.created_utc >= fiveDaysAgo;
     })
 
@@ -148,7 +165,7 @@ module.exports = class Bot {
     filteredSubmissions = filteredSubmissions.filter(submission => {
       return !this.blacklistedUsers.includes(submission.author.name);
     })
-    
+
     // only include new submissions (not dealt with by the bot)
     filteredSubmissions = filteredSubmissions.filter(submission => {
       return !this.oldSubmissions.includes(submission.id);
@@ -159,7 +176,7 @@ module.exports = class Bot {
     })
 
     return filteredSubmissions;
-    
+
   }
 
   async alreadyCommentedComment(comment) {
@@ -180,36 +197,79 @@ module.exports = class Bot {
 
   generateComment(scanResults, originalUrls, devLink, feedbackLink) {
 
+    let characters = 0
+
+    let completelyFailed = scanResults.failed.filter(x => x.reddit == undefined)
+    let partiallyFailed = scanResults.failed.filter(x => x.reddit != undefined)
+
     let failedString = `  \n`
-    
-    if (scanResults.failed.length > 0) {
+
+    if (partiallyFailed.length > 0) {
       failedString = `  \n
-Whoops, I failed to scan the following URLs:  \n
+*I encountered issues scanning the following URLs, but still managed to scan them*:  \n`
+      let partiallyFailedTable = partiallyFailed.reduce((tableString, cur) => {
+        return `  \n${tableString}\n${cur.reddit}${cur.missingFileSizes ? `^(File sizes are not included because the scan might take a long time. Reply \`!size\` to start a low-priority scan including file sizes (could take a few hours\))  \n` : ``}(Error cause: ${cur.reason})  \n`;
+      }, ``);
+
+      failedString += partiallyFailedTable
+
+    }
+
+    if (completelyFailed.length > 0) {
+      failedString = `  \n
+*Whoops, I failed to scan the following URLs*:  \n
 |URL|Reason|
 |---|------|
 `
       for (const { url, reason } of scanResults.failed) {
         failedString += `|${url}|${reason}|\n`
       }
-      failedString += `\nI swear I really tried [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)  \n`
+      failedString += `\n*I swear I really tried* [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)  \n`
     }
-    
-    let tables = scanResults.successful.reduce((tableString, cur)=> {
-      return `${tableString}\n${cur.reddit}`;
-    }, ``);
 
-    return `\
-Here are the scan results:  
+    let commentsArray = [`\
+*Here are the scan results*:  
+    `]
 
-${tables}  
-${scanResults.successful[0].credits}
+    for (const scanResult of scanResults.successful) {
+
+      let odResultString = `\n${scanResult.reddit}${scanResult.missingFileSizes ? `^(File sizes are not included because the scan might take a long time. Reply \`!size\` to start a low-priority scan including file sizes (could take a few hours\))` : ``}\n`
+      // split the following results into a new comment/string
+      if (commentsArray[commentsArray.length - 1].length > 9500) {
+        commentsArray.push(odResultString)
+      }
+      commentsArray[commentsArray.length - 1] += odResultString
+
+    };
+
+    commentsArray[commentsArray.length - 1] += `
 ${failedString}
+${scanResults.successful[0].credits}  
+
 ---
 
-I'm a bot, beep, boop!
+*I'm a bot, beep, boop!*
 
 ^([Contact Developer](${devLink}) | [Give Feedback](${feedbackLink}))
     `;
+
+    return commentsArray
+
+  }
+
+  async extractOdUrlsFromSubmissionOrComment(submission, comment) {
+
+    let odUrls = await extractUrls(comment, true);
+
+    if (odUrls.length > 0) {
+      console.log(`extracting ODs from *comment with custom urls* on '${submission.title}' (https://reddit.com/${submission.id})`);
+    } else {
+      console.log(`extracting ODs from '${submission.title}' (https://reddit.com/${submission.id})`);
+      odUrls = await extractUrls(submission);
+    }
+
+    console.log(`odUrls:`, odUrls);
+    return odUrls || []
 
   }
 
@@ -217,23 +277,15 @@ I'm a bot, beep, boop!
 
     submission = await submission.fetch();
 
-    let odUrls;
-    
     if (comment) {
       comment = await comment.fetch();
     }
 
-    odUrls = await extractUrls(comment, true);
+    let odUrls = await this.extractOdUrlsFromSubmissionOrComment(submission, comment)
 
-    if (odUrls.length > 0) {
-      console.log(`scanning *comment with custom urls* on '${submission.title}' (https://reddit.com/${submission.id})`);
-    } else {
-      console.log(`scanning '${submission.title}' (https://reddit.com/${submission.id})`);
-      odUrls = await extractUrls(submission);
+    if (odUrls.length === 0) {
+      throw new MissingODError(`No OD URLs found`)
     }
-
-    
-    console.log(`odUrls:`, odUrls);
 
     let scanResults = {
       successful: [],
@@ -241,55 +293,91 @@ I'm a bot, beep, boop!
     };
 
     try {
-      
+
       scanResults = await scanUrls(odUrls);
 
     } catch (err) {
       throw err
     }
-    
+
     try {
 
-      let reply;
-      
-        if (comment) {
-          reply = await comment.reply(this.generateComment(scanResults, odUrls, this.devLink, this.feedbackLink));
-          console.log(`replied to comment https://reddit.com/comments/${submission.id}/_/${comment.id}`);
-        } else {
-          reply = await submission.reply(this.generateComment(scanResults, odUrls, this.devLink, this.feedbackLink));
-          console.log(`replied to '${submission.title}' (https://reddit.com/${submission.id})`);
-        }
+      await this.replyWithResults(scanResults, odUrls, submission, comment)
 
-
-        // search the subreddit's mods for the bots user name
-        let sub = await this.client.getSubreddit(reply.subreddit.display_name);
-        let mod = await sub.getModerators({ name: this.username });
-
-        // approve reply if bot is a moderator with posts permission
-        if (mod.length > 0 && mod[0].mod_permissions.includes('posts')) {
-          await reply.approve();
-          console.log('approved comment');
-        }
-        
     } catch (err) {
       throw new Error(`error replying to https://reddit.com/${submission.id}: ${err}`);
     }
-    
+
+  }
+
+  async replyWithResults(scanResults, odUrls, submission, comment) {
+
+    let lastReply;
+    let commentArray = this.generateComment(scanResults, odUrls, this.devLink, this.feedbackLink)
+
+    if (commentArray.length > 1) {
+      console.warn(`Character limit exceeded! Splitting into multiple comments...`)
+    }
+
+    // reply the first time
+    if (comment) {
+      lastReply = await comment.reply(commentArray.shift());
+      console.log(`replied to comment https://reddit.com/comments/${submission.id}/_/${comment.id}`);
+    } else {
+      lastReply = await submission.reply(commentArray.shift());
+      console.log(`replied to '${submission.title}' (https://reddit.com/${submission.id})`);
+    }
+
+    // search the subreddit's mods for the bots user name
+    let sub = await this.client.getSubreddit(lastReply.subreddit.display_name);
+    let mod = await sub.getModerators({ name: this.username });
+
+    if (mod.length > 0 && mod[0].mod_permissions.includes('posts')) {
+      await lastReply.approve();
+      console.log('approved comment');
+    }
+
+    // create the remaining comments
+    for (const commentBody of commentArray) {
+
+      await this.sleep(5 * 1000)
+      lastReply = await lastReply.reply(commentBody);
+      console.log(`Extended reply on https://reddit.com/comments/${submission.id}/_/${comment.id}`)
+
+      // approve reply if bot is a moderator with posts permission
+      if (mod.length > 0 && mod[0].mod_permissions.includes('posts')) {
+        await lastReply.approve();
+        console.log('approved comment');
+      }
+
+    }
+
   }
 
   async apologize(submissionOrComment, reason) {
 
-    await this.sleep(1000*10) // wait 10 seconds to (hopefully) prevent rate limiting
+    await this.sleep(1000 * 10) // wait 10 seconds to (hopefully) prevent rate limiting
 
     let reply = await submissionOrComment.reply(`
 Sorry, I didn't manage to scan this OD :/
 
-[ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)
+I swear I really tried [ಥ\_ಥ](https://i.imgur.com/CJMGxMs.mp4)
 
 ${reason ? `(Reason: ${reason})` : ``}
     `);
     console.log(`apologized to ${submissionOrComment.id}`);
-    
+
+  }
+
+  async replyMissingOD(submissionOrComment, reason) {
+
+    await this.sleep(1000 * 10) // wait 10 seconds to (hopefully) prevent rate limiting
+
+    let reply = await submissionOrComment.reply(`
+Sorry, I couldn't find any OD URLs in both the post or your comment  :/
+    `);
+    console.log(`replied to ${submissionOrComment.id} about missing OD URLs`);
+
   }
 
   async refreshSubmissions() {
@@ -313,18 +401,46 @@ ${reason ? `(Reason: ${reason})` : ``}
 
           try {
 
+            //FIXME add to scan queue instead
             await this.scanAndComment(submission);
             count++;
 
           } catch (err) {
 
-            console.error(err);
-            try {
-              await this.apologize(submission);
-            } catch (err) {
-              console.error(`Failed to apologize:`, err)
+            if (err.message.includes(`DELETED_SUBMISSION`)) { //TODO not sure if this exists for submissions
+              console.warn(`Submission was deleted by the user!`)
+            } else {
+
+              console.error(`failed to reply with scan result:`, err)
+
+              if (err instanceof ScanError) {
+
+                try {
+                  await this.apologize(submission, err.message)
+                } catch (err) {
+                  console.error(`Failed to apologize:`, err)
+                }
+
+              } else if (err instanceof MissingODError) {
+
+                try {
+                  await this.replyMissingOD(submission, err.message)
+                } catch (err) {
+                  console.error(`Failed to reply about missing ODs:`, err)
+                }
+
+              } else {
+
+                try {
+                  await this.apologize(submission, `Something went really wrong. /u/Chaphasilor please help o.O`)
+                } catch (err) {
+                  console.error(`Failed to apologize:`, err)
+                }
+
+              }
+
             }
-            
+
           }
 
         } else {
@@ -428,12 +544,12 @@ ${reason ? `(Reason: ${reason})` : ``}
       pms.forEach(message => {
         this.oldPMs.push(message.id);
       })
-      
+
       // filter out stale PMs
       pms = pms.filter(message => {
-        return message.created_utc*1000 >= Date.now()-this.invocationsStaleTimeout*1000;
+        return message.created_utc * 1000 >= Date.now() - this.invocationsStaleTimeout * 1000;
       })
-      
+
       if (pms.length > 0) {
         console.log(`pms:`, pms);
       }
@@ -450,26 +566,57 @@ ${reason ? `(Reason: ${reason})` : ``}
         } catch (err) {
 
           if (err.message.includes(`DELETED_COMMENT`)) {
-            console.warn(`Invoking comment was deleted by the user!`)  
+            console.warn(`Invoking comment was deleted by the user!`)
           } else {
 
             console.error(`failed to reply with scan result:`, err)
 
-            try {
-              await this.apologize(message, err.message)
-            } catch (err) {
-              console.error(`Failed to apologize:`, err)
+            if (err instanceof ScanError) {
+
+              try {
+                await this.apologize(message, err.message)
+              } catch (err) {
+                console.error(`Failed to apologize:`, err)
+              }
+
+            } else if (err instanceof MissingODError) {
+
+              try {
+                await this.replyMissingOD(message, err.message)
+              } catch (err) {
+                console.error(`Failed to reply about missing ODs:`, err)
+              }
+
+            } else {
+
+              try {
+                await this.apologize(message, `Something went really wrong. /u/Chaphasilor please help o.O`)
+              } catch (err) {
+                console.error(`Failed to apologize:`, err)
+              }
+
             }
 
           }
 
-          
+
         }
 
       }
 
     } catch (err) {
-      console.error(`an error occurred checking for mentions:`, err);
+      console.error(`an error occurred checking for PMs:`, err);
+
+      if (err.message.includes(`RATELIMIT`)) {
+
+        let match = err.message.match(/Take a break for (\d+) seconds/)
+        if (match.length > 1) {
+          console.warn(`Ratelimited for ${match[1]} seconds!`)
+          await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
+        }
+
+      }
+
     } finally {
       this.running.checkPMs = false;
     }
@@ -500,7 +647,7 @@ ${reason ? `(Reason: ${reason})` : ``}
 
       // filter only actual comment replies which the bot didn't already comment on
       mentions = mentions.filter(message => message.was_comment == true)
-      
+
       // only include new mentions (not dealt with by the bot)
       mentions = mentions.filter(comment => {
         return !this.oldMentions.includes(comment.id);
@@ -509,12 +656,12 @@ ${reason ? `(Reason: ${reason})` : ``}
       mentions.forEach(comment => {
         this.oldMentions.push(comment.id);
       })
-      
+
       // filter out stale comments
       mentions = mentions.filter(comment => {
-        return comment.created_utc*1000 >= Date.now()-this.invocationsStaleTimeout*1000;
+        return comment.created_utc * 1000 >= Date.now() - this.invocationsStaleTimeout * 1000;
       })
-      
+
       let unrepliedInvocations = [];
 
       // temporary workaround until https://github.com/not-an-aardvark/snoowrap/issues/305 is resolved
@@ -538,28 +685,108 @@ ${reason ? `(Reason: ${reason})` : ``}
         comment = await (await this.client.getComment(comment.id)).fetch() // reload the comment because a comment fetched via the inbox is missing some fields (like link_id)
 
         // const submission = await this.client.getSubmission(comment.context.split(`/`)[4]);
-        const submission = await this.client.getSubmission(comment.link_id);
-  
-        try {
+        const submission = await (await this.client.getSubmission(comment.link_id)).fetch();
 
-          await this.scanAndComment(submission, comment)
-          console.log(`commented successfully!`)
-
-        } catch (err) {
-
-          if (err.message.includes(`DELETED_COMMENT`)) {
-            console.warn(`Invoking comment was deleted by the user!`)  
-          } else if (err.message.includes(`RATELIMIT`)) {
-
-            let match = err.message.match(/Take a break for (\d+) seconds/)
-            if (match.length > 1) {
-              console.warn(`Ratelimited for ${match[1]} seconds!`)
-              await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
-            }
-
+        // add new mention to the queue
+        if (!this.scanQueue.find(x => {
+          if (comment) {
+            return x.comment.id === comment.id
           } else {
+            x.submission.id === submission.id
+          }
+        })) {
 
-            console.error(`failed to reply with scan result:`, err)
+          let threadTitle = `Scan Request on ${(new Date()).toUTCString()}`
+
+          // // only send the acknowledgement if there are other scans in the queue
+          //TODO this can only be uncommented if instead a pm is sent saying that the scan started
+          // if (this.scanQueue.length > 0 || this.running.scanNextInQueue) {
+
+          let queueLength = this.scanQueue.length
+          let totalODs = await this.scanQueue.reduce(async (sum, queuedScan) => {
+            let odUrls = await this.extractOdUrlsFromSubmissionOrComment(queuedScan.submission, queuedScan.comment)
+            return (await sum) + odUrls.length //!!! `sum` is a promise
+          }, 0)
+
+
+          let threadId
+          try {
+            threadId = await sendPM(this.client, comment.author.name, threadTitle,
+              `*I've received your request and added it to the queue :)*  
+  
+  ${this.running.scanNextInQueue ? `One scan is running right now.` : ``}  
+  There ${queueLength === 1 ? `is` : `are`} currently ${queueLength} other scan${queueLength === 1 ? `` : `s`} in the queue (with ${totalODs} OD${totalODs === 1 ? `` : `s`} in total).
+  
+  [Link to invoking comment](https://reddit.com/comments/${submission.id}/_/${comment.id})`
+            )
+          } catch (err) {
+            console.warn(`Error while sending PM:`, err)
+          }
+
+          //TODO also save the time when the scan was added to the queue, can be used to decide whether or not to notify the user that the scan started (if the scan is likely to take a bit longer)
+          this.scanQueue.push({
+            submission,
+            comment,
+            threadTitle,
+          })
+
+        }
+
+      }
+
+    } catch (err) {
+
+      console.error(`an error occurred checking for mentions:`, err);
+      if (err.message.includes(`RATELIMIT`)) {
+
+        let match = err.message.match(/Take a break for (\d+) seconds/)
+        if (match.length > 1) {
+          console.warn(`Ratelimited for ${match[1]} seconds!`)
+          await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
+        }
+
+      }
+
+    } finally {
+      this.running.checkForMentions = false;
+    }
+
+  }
+
+  async scanNextInQueue() {
+
+    if (this.scanQueue.length > 0) {
+
+      this.running.scanNextInQueue = true
+
+      // load scan job from the queue
+      const { submission, comment, threadTitle } = this.scanQueue.shift()
+
+      console.info(`${threadTitle} started!`)
+
+      try {
+        // await sendPM(this.client, comment.author.name, `re: ${threadTitle}`, `*I've started scanning the OD(s) you've requested a scan on!*`)
+
+        await this.scanAndComment(submission, comment)
+        console.log(`commented successfully!`)
+
+      } catch (err) {
+
+        if (err.message.includes(`DELETED_COMMENT`)) {
+          console.warn(`Invoking comment was deleted by the user!`)
+        } else if (err.message.includes(`RATELIMIT`)) {
+
+          let match = err.message.match(/Take a break for (\d+) seconds/)
+          if (match.length > 1) {
+            console.warn(`Ratelimited for ${match[1]} seconds!`)
+            await this.sleep(1000 * parseInt(match[1]) * 1.5) // wait a bit longer that the duration reported by the API
+          }
+
+        } else {
+
+          console.error(`failed to reply with scan result:`, err)
+
+          if (err instanceof ScanError) {
 
             try {
               await this.apologize(comment, err.message)
@@ -567,31 +794,45 @@ ${reason ? `(Reason: ${reason})` : ``}
               console.error(`Failed to apologize:`, err)
             }
 
+          } else if (err instanceof MissingODError) {
+
+            try {
+              await this.replyMissingOD(comment, err.message)
+            } catch (err) {
+              console.error(`Failed to reply about missing ODs:`, err)
+            }
+
+          } else {
+
+            try {
+              await this.apologize(comment, `Something went really wrong. /u/Chaphasilor please help o.O`)
+            } catch (err) {
+              console.error(`Failed to apologize:`, err)
+            }
+
           }
 
-          
         }
+
 
       }
 
-    } catch (err) {
-      console.error(`an error occurred checking for mentions:`, err);
-    } finally {
-      this.running.checkForMentions = false;
+      this.running.scanNextInQueue = false
+
     }
 
   }
 
-  async updateLink(comment, scanResults) {
+  // async updateLink(comment, scanResults) {
 
-    let submission = await this.client.getSubmission(comment.parent_id);
-    submission.url = await submission.url;
-    submission.id = await submission.id;
+  //   let submission = await this.client.getSubmission(comment.parent_id);
+  //   submission.url = await submission.url;
+  //   submission.id = await submission.id;
 
-    await comment.edit(this.generateComment(scanResults, this.devLink, this.feedbackLink));
-    console.log('updated link on ', 'https://reddit.com/' + submission.id);
+  //   await comment.edit(this.generateComment(scanResults, this.devLink, this.feedbackLink));
+  //   console.log('updated link on ', 'https://reddit.com/' + submission.id);
 
-  }
+  // }
 
   sleep(ms) {
     return new Promise((resolve, reject) => {
