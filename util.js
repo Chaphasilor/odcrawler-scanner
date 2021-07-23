@@ -94,11 +94,18 @@ module.exports.extractUrls = async function extractUrls(submissionOrComment, isC
     
   }
 
-  matches = matches.filter(url => {
-    return !excludedDomains.includes(new URL(url).hostname)
-  })
+  // filter out duplicate URLs as well as URLs from excluded domains
+  let filteredUrls = []
+  for (const url of matches) {
+    if (
+      !filteredUrls.some(x => x === url) &&
+      !excludedDomains.includes(new URL(url).hostname)
+      ) {
+      filteredUrls.push(url)
+    }
+  }
   
-  return matches;
+  return filteredUrls;
   
 }
 
@@ -161,8 +168,8 @@ async function checkDiscoveryServerReachable() {
   
     let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
 
-    console.debug(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
-    await sleep(sleepMinutes*60*1000)
+    console.debug(`Waiting ${sleepMinutes} second${sleepMinutes > 1 ? `s` : ``} before trying again`)
+    await sleep(sleepMinutes*1000)
 
   }
   

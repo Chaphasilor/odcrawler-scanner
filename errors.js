@@ -28,7 +28,23 @@ class MissingODError extends Error {
   }
 }
 
+class PMsDisabledError extends Error {
+  constructor(message, ...extras) {
+
+    super()
+
+    Error.captureStackTrace(this, this.constructor)
+    this.name = 'PMsDisabledError'
+    this.message = message
+    if (extras) {
+      this.extras = extras
+    }
+
+  }
+}
+
 module.exports = {
   ScanError,
   MissingODError,
+  PMsDisabledError,
 }
