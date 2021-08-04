@@ -8,7 +8,9 @@ const odd = require(`open-directory-downloader`);
 
 const { ScanError } = require(`./errors`)
 
-const indexer = new odd.OpenDirectoryDownloader();
+const indexer = new odd.OpenDirectoryDownloader({
+  maximumMemory: (!isNaN(Number(process.env.ODD_MAXIMUM_MEMORY)) && Number(process.env.ODD_MAXIMUM_MEMORY) > 0) ? Number(process.env.ODD_MAXIMUM_MEMORY) : undefined // 3 GB
+});
 
 module.exports.scanUrls = async function scanUrls(urls) {
 
@@ -31,6 +33,17 @@ module.exports.scanUrls = async function scanUrls(urls) {
       }));
     } catch (err) {
       console.warn(`Failed to scan '${url}':`, err);
+
+      let reason = ``
+
+      if (err[0] instanceof odd.ODDError) {
+        reason = err[0].message
+      } else if (err[0] instanceof odd.ODDOutOfMemoryError) {
+        reason = `Scanner ran out of memory`
+      } else {
+        reason = `Internal Error`
+      }
+      
       scanResults.failed.push({
         url,
         reason: err[0] instanceof odd.ODDError ? err[0].message : `Internal Error`, // TODO once Google Drive errors are supported in `open-directory-downloader`, detect them (via string matching) and provide an appropriate error message

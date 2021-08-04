@@ -74,6 +74,7 @@ There are many different environment variables than can be used to customize how
 - `REDDIT_CONSIDER_INVOCATION_STALE`: the time after a username mention should not invoke a scan anymore, in seconds. Recommended: `36000`  
   This stale timeout is only used for "new" mentions that the bot hasn't seen before, e.g. after a restart.
 - `DOMAINS_EXCLUDED_FROM_SCANNING`: and array of domains which will be ignored when the bot scans the invoking comment for user-supplied URLs. Recommended: `["reddit.com", "www.reddit.com", "preview.redd.it", "imgur.com", "i.imgur.com", "youtube.com", "youtu.be", "www.koalabear.nl", "koalabear.nl", "github.com", "open-directory-downloader.herokuapp.com"]`
+- `ODD_MAXIMUM_MEMORY`: the maximum memory that can be used by any OpenDirectoryDownloader process. if omitted or non-positive, memory usage is unlimited
 - `DB_FILE_PATH`: the relative path to an *existing* JSON file containing just `[]`, e.g. `db.json`  
   This file is used to store information about performed scans for further processing.
 
