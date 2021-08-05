@@ -20,7 +20,7 @@
     "is-local-ip": "^1.1.0",
     "markdown-link-extractor": "^1.3.0",
     "node-fetch": "^2.6.1",
-    "open-directory-downloader": "^5.1.1",
+    "open-directory-downloader": "^5.2.0",
     "request": "^2.88.2",
     "snoowrap": "^1.22.0"
   },

@@ -48,8 +48,9 @@ module.exports.scanUrls = async function scanUrls(urls) {
       
       let result = await indexer.scanUrl(url, scanOptions)
 
-      // if a slow scan is required and there aren't too many files, do it immediately before replying with scan results
+      // if a full scan is required and there aren't too many files, do it immediately before replying with scan results
       if (result.missingFileSizes && result.stats?.totalFiles < (Number(process.env.ODD_MAX_FILES_SLOW_SCAN) || -1)) {
+        console.info(`Missing file sizes for "${url}" (small OD), doing a full scan!`)
         await fs.unlink(result.jsonFile)
         scanOptions.fastScan = false //!!!
         result = await indexer.scanUrl(url, scanOptions)
