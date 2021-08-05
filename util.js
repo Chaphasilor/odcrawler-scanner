@@ -1,15 +1,17 @@
-const fs = require(`fs`);
+const fs = require(`fs/promises`);
+const fsLegacy = require(`fs`)
 const { createGzip } = require('zlib');
 const pipe = require(`util`).promisify(require(`stream`).pipeline);
 const markdownLinkExtractor = require('markdown-link-extractor');
 const fetch = require(`node-fetch`);
 const FormData = require(`form-data`);
 const odd = require(`open-directory-downloader`);
+const isLocal = require(`is-local-ip`)
 
 const { ScanError } = require(`./errors`)
 
 const indexer = new odd.OpenDirectoryDownloader({
-  maximumMemory: (!isNaN(Number(process.env.ODD_MAXIMUM_MEMORY)) && Number(process.env.ODD_MAXIMUM_MEMORY) > 0) ? Number(process.env.ODD_MAXIMUM_MEMORY) : undefined // 3 GB
+  maximumMemory: (!isNaN(Number(process.env.ODD_MAXIMUM_MEMORY)) && Number(process.env.ODD_MAXIMUM_MEMORY) > 0) ? Number(process.env.ODD_MAXIMUM_MEMORY) : undefined
 });
 
 module.exports.scanUrls = async function scanUrls(urls) {
@@ -21,16 +23,42 @@ module.exports.scanUrls = async function scanUrls(urls) {
 
   for (let url of urls) {
 
+    if (isLocalIP(url)) {
+
+      scanResults.failed.push({
+        url,
+        reason: `Scans of local IPs or TLD-less domains are not possible`,
+        missingFileSizes: false,
+      })
+
+      continue
+    }
+
     console.info(`Starting scan of '${url}'...`)
     try {
-      scanResults.successful.push(await indexer.scanUrl(url, {
+
+      const scanOptions = {
         keepJsonFile: true,
         performSpeedtest: true,
         uploadUrlFile: true,
         fastScan: true,
         threads: 4,
         timeout: 30,
-      }));
+      }
+      
+      let result = await indexer.scanUrl(url, scanOptions)
+
+      // if a slow scan is required and there aren't too many files, do it immediately before replying with scan results
+      if (result.missingFileSizes && result.stats?.totalFiles < (Number(process.env.ODD_MAX_FILES_SLOW_SCAN) || -1)) {
+        await fs.unlink(result.jsonFile)
+        scanOptions.fastScan = false //!!!
+        result = await indexer.scanUrl(url, scanOptions)
+      }
+      
+      scanResults.successful.push(result);
+
+      saveScanResults(result.jsonFile, result.scannedUrl);
+
     } catch (err) {
       console.warn(`Failed to scan '${url}':`, err);
 
@@ -54,8 +82,6 @@ module.exports.scanUrls = async function scanUrls(urls) {
     
   }
 
-  scanResults.successful.forEach(result => saveScanResults(result.jsonFile, result.scannedUrl));
-
   console.debug(`scanResults:`, scanResults);
 
   if (scanResults.successful.length === 0 && urls.length > 0) {
@@ -67,6 +93,20 @@ module.exports.scanUrls = async function scanUrls(urls) {
   }
 
   return scanResults;
+  
+}
+
+function isLocalIP(url) {
+
+  try {
+
+    const parsedUrl = new URL(url)
+    
+    return isLocal(parsedUrl.hostname) || !parsedUrl.hostname.includes(`.`)
+    
+  } catch (err) {
+    return false
+  }
   
 }
 
@@ -133,7 +173,7 @@ async function saveScanResults(scanPath, scannedUrl) {
     
     fileToUpload = await compressFile(scanPath)
     if (scanPath !== fileToUpload) {
-      fs.unlinkSync(scanPath)
+      await fs.unlink(scanPath)
     }
     
   } catch (err) {
@@ -145,7 +185,7 @@ async function saveScanResults(scanPath, scannedUrl) {
 
   try {
 
-    let db = JSON.parse(fs.readFileSync(process.env.DB_FILE_PATH, {
+    let db = JSON.parse(await fs.readFile(process.env.DB_FILE_PATH, {
       encoding: `utf-8`,
     }))
 
@@ -154,7 +194,7 @@ async function saveScanResults(scanPath, scannedUrl) {
       pathToScanFile: fileToUpload,
     })
 
-    fs.writeFileSync(process.env.DB_FILE_PATH, JSON.stringify(db))
+    await fs.writeFile(process.env.DB_FILE_PATH, JSON.stringify(db))
 
     console.log(`Saved scan result to db file`)
     
@@ -199,7 +239,7 @@ async function tryToUploadScansFromDB() {
   
   try {
     
-    let db = JSON.parse(fs.readFileSync(process.env.DB_FILE_PATH, {
+    let db = JSON.parse(await fs.readFile(process.env.DB_FILE_PATH, {
       encoding: `utf-8`,
     }))
 
@@ -214,13 +254,15 @@ async function tryToUploadScansFromDB() {
 
       try {
         
-        if (fs.existsSync(scanResult.pathToScanFile)) {
+        try {
+
+          await fs.access(scanResult.pathToScanFile)
 
           await uploadScan(scanResult.pathToScanFile)
-          fs.unlinkSync(scanResult.pathToScanFile)
+          await fs.unlink(scanResult.pathToScanFile)
           console.log(`Scan file deleted!`)
 
-        } else {
+        } catch (err) {
           console.warn(`Scan file doesn't exist anymore, removing from DB...`)
         }
         
@@ -233,7 +275,7 @@ async function tryToUploadScansFromDB() {
       
     }
 
-    fs.writeFileSync(process.env.DB_FILE_PATH, JSON.stringify(failed))
+    await fs.writeFile(process.env.DB_FILE_PATH, JSON.stringify(failed))
     
   } catch (err) {
     console.error(`Error while trying to upload scans:`, err)
@@ -246,7 +288,7 @@ async function uploadScan(scanPath) {
   console.log(`Uploading scan...`)
   
   const form = new FormData();
-  form.append(`file`, fs.createReadStream(scanPath))
+  form.append(`file`, fsLegacy.createReadStream(scanPath))
   
   let res = await fetch(`${process.env.ODCRAWLER_DISCOVERY_ENDPOINT}/upload`, {
     method: `POST`,
@@ -283,8 +325,8 @@ async function compressFile(input, output) {
   
   const outputName = output || `${input}.gz`;
   const gzip = createGzip();
-  const source = fs.createReadStream(input);
-  const destination = fs.createWriteStream(outputName);
+  const source = fsLegacy.createReadStream(input);
+  const destination = fsLegacy.createWriteStream(outputName);
   await pipe(source, gzip, destination);
 
   return outputName

@@ -197,7 +197,7 @@ module.exports = class Bot {
 
   generateComment(scanResults, originalUrls, devLink, feedbackLink) {
 
-    let characters = 0
+    let maxSaveCharacters = 9500
 
     let completelyFailed = scanResults.failed.filter(x => x.reddit == undefined)
     let partiallyFailed = scanResults.failed.filter(x => x.reddit != undefined)
@@ -235,7 +235,7 @@ module.exports = class Bot {
 
       let odResultString = `\n${scanResult.reddit}${scanResult.missingFileSizes ? `^(File sizes are not included because the scan might take a long time. Reply \`!size\` to start a low-priority scan including file sizes (could take a few hours\))` : ``}\n`
       // split the following results into a new comment/string
-      if (commentsArray[commentsArray.length - 1].length > 9500) {
+      if ((commentsArray[commentsArray.length - 1].length + odResultString.length) > maxSaveCharacters) {
         commentsArray.push(odResultString)
       }
       commentsArray[commentsArray.length - 1] += odResultString
