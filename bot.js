@@ -381,7 +381,9 @@ ${reason ? `(Reason: ${reason})` : ``}
     await this.sleep(1000 * 10) // wait 10 seconds to (hopefully) prevent rate limiting
 
     let reply = await submissionOrComment.reply(`
-Sorry, I couldn't find any OD URLs in both the post or your comment  :/
+*Sorry, I couldn't find any OD URLs in both the post or your comment*  :/  
+
+(Google Drive URLs are not supported)
     `);
     console.log(`replied to ${submissionOrComment.id} about missing OD URLs`);
 
