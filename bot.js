@@ -235,10 +235,17 @@ module.exports = class Bot {
 
       let odResultString = `\n${scanResult.reddit}${scanResult.missingFileSizes ? `^(File sizes are not included because the scan might take a long time. Reply \`!size\` to start a low-priority scan including file sizes (could take a few hours\))` : ``}\n`
       // split the following results into a new comment/string
-      if ((commentsArray[commentsArray.length - 1].length + odResultString.length) > maxSaveCharacters) {
+      if (
+        (
+          commentsArray[commentsArray.length - 1].length +
+          odResultString.length + 
+          failedString.length + 
+          scanResults.successful[0].credits.length
+        ) > maxSaveCharacters) {
         commentsArray.push(odResultString)
+      } else {
+        commentsArray[commentsArray.length - 1] += odResultString
       }
-      commentsArray[commentsArray.length - 1] += odResultString
 
     };
 
