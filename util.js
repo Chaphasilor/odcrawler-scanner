@@ -11,7 +11,8 @@ const isLocal = require(`is-local-ip`)
 const { ScanError } = require(`./errors`)
 
 const indexer = new odd.OpenDirectoryDownloader({
-  maximumMemory: (!isNaN(Number(process.env.ODD_MAXIMUM_MEMORY)) && Number(process.env.ODD_MAXIMUM_MEMORY) > 0) ? Number(process.env.ODD_MAXIMUM_MEMORY) : undefined
+  maximumMemory: (!isNaN(Number(process.env.ODD_MAXIMUM_MEMORY)) && Number(process.env.ODD_MAXIMUM_MEMORY) > 0) ? Number(process.env.ODD_MAXIMUM_MEMORY) : undefined,
+  statsInterval: Infinity,
 });
 
 module.exports.scanUrls = async function scanUrls(urls) {
