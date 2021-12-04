@@ -12,7 +12,7 @@ const { ScanError } = require(`./errors`)
 
 const indexer = new odd.OpenDirectoryDownloader({
   maximumMemory: (!isNaN(Number(process.env.ODD_MAXIMUM_MEMORY)) && Number(process.env.ODD_MAXIMUM_MEMORY) > 0) ? Number(process.env.ODD_MAXIMUM_MEMORY) : undefined,
-  statsInterval: Infinity,
+  statsInterval: 60 * 60,
 });
 
 module.exports.scanUrls = async function scanUrls(urls) {
