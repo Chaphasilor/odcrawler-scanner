@@ -209,27 +209,31 @@ async function saveScanResults(scanPath, scannedUrl) {
 async function checkDiscoveryServerReachable() {
 
   while (true) {
-
-    console.debug(`Checking if discovery server is reachable...`);
-
-    let res = await fetch(process.env.ODCRAWLER_DISCOVERY_ENDPOINT, {
-      method: `head`,
-    })
+    try {
+      
+      console.debug(`Checking if discovery server is reachable...`);
   
-    if (res.ok) {
-
-      console.debug(`Discovery server is online!`);
-      await tryToUploadScansFromDB()
-
-    } else {
-      console.warn(`Discovery server appears to be offline.`);
+      let res = await fetch(process.env.ODCRAWLER_DISCOVERY_ENDPOINT, {
+        method: `head`,
+      })
+    
+      if (res.ok) {
+  
+        console.debug(`Discovery server is online!`);
+        await tryToUploadScansFromDB()
+  
+      } else {
+        console.warn(`Discovery server appears to be offline.`);
+      }
+    
+      let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
+  
+      console.debug(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
+      await sleep(1000 * 60 * sleepMinutes)
+      
+    } catch (err) {
+      console.warn(`Error while checking discovery server status:`, err)
     }
-  
-    let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
-
-    console.debug(`Waiting ${sleepMinutes} second${sleepMinutes > 1 ? `s` : ``} before trying again`)
-    await sleep(sleepMinutes*1000)
-
   }
   
 }

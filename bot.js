@@ -652,6 +652,8 @@ ${reason ? `(Reason: ${reason})` : ``}
 
       } catch (err) {
         console.error(`Couldn't load mentions, seems like there aren't any?:`, err)
+        this.running.checkForMentions = false;
+        return
       }
 
       // filter only actual comment replies which the bot didn't already comment on
