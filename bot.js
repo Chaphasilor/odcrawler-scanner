@@ -487,6 +487,11 @@ ${reason ? `(Reason: ${reason})` : ``}
 
       let praisingComments = comments.filter(comment => this.praises.includes(comment.body.toLowerCase()));
 
+      // filter out stale comments
+      praisingComments = praisingComments.filter(comment => {
+        return comment.created_utc * 1000 >= Date.now() - this.invocationsStaleTimeout * 1000;
+      })
+
       // console.log('praisingComments:', praisingComments);
 
       let unrepliedComments = [];
@@ -504,7 +509,7 @@ ${reason ? `(Reason: ${reason})` : ``}
       for (let comment of unrepliedComments) {
         try {
           console.log(`replying to praising comment ${comment.body} from /u/${comment.author.name}`);
-          let newComment = await comment.reply('Thanks ;)');
+          let newComment = await comment.reply(`Thanks ;)`);
           console.log(`reply sent, comment id ${newComment.id}`);
           success++;
         } catch (error) {
@@ -519,7 +524,7 @@ ${reason ? `(Reason: ${reason})` : ``}
     } catch (err) {
 
       this.running.checkInbox = false;
-      console.error(`an error occured checking the inbox: ${err}`);
+      console.error(`an error occurred checking the inbox: ${err}`);
     }
 
   }
