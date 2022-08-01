@@ -43,8 +43,8 @@ module.exports.scanUrls = async function scanUrls(urls) {
         performSpeedtest: true,
         uploadUrlFile: true,
         fastScan: true,
-        threads: 4,
-        timeout: 30,
+        threads: 7,
+        timeout: 15,
       }
       
       let result = await indexer.scanUrl(url, scanOptions)
@@ -208,6 +208,8 @@ async function saveScanResults(scanPath, scannedUrl) {
 
 async function checkDiscoveryServerReachable() {
 
+  const sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
+
   while (true) {
     try {
       
@@ -225,14 +227,13 @@ async function checkDiscoveryServerReachable() {
       } else {
         console.warn(`Discovery server appears to be offline.`);
       }
-    
-      let sleepMinutes = Number(process.env.ODCRAWLER_DISCOVERY_UPLOAD_FREQUENCY)
-  
+      
       console.debug(`Waiting ${sleepMinutes} minute${sleepMinutes > 1 ? `s` : ``} before trying again`)
       await sleep(1000 * 60 * sleepMinutes)
       
     } catch (err) {
       console.warn(`Error while checking discovery server status:`, err)
+      await sleep(1000 * 60 * sleepMinutes/2)
     }
   }
   
