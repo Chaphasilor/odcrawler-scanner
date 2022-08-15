@@ -29,7 +29,7 @@
     "markdown-link-extractor": "^4.0.1",
     "ms": "^2.1.3",
     "node-fetch": "^2.6.1",
-    "open-directory-downloader": "^8.0.2",
+    "open-directory-downloader": "^9.0.0",
     "request": "^2.88.2",
     "snoowrap": "^1.23.0"
   },
