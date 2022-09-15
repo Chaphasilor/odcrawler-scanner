@@ -656,7 +656,12 @@ ${reason ? `(Reason: ${reason})` : ``}
         });
 
       } catch (err) {
-        console.error(`Couldn't load mentions, seems like there aren't any?:`, err)
+
+        if (err.message.toLowerCase().includes(`etimedout`)) {
+          console.warn(`Timeout while fetching mentions...`)
+        } else {
+          console.error(`Couldn't load mentions, seems like there aren't any?:`, err)
+        }
         this.running.checkForMentions = false;
         return
       }
