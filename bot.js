@@ -197,7 +197,7 @@ module.exports = class Bot {
 
   generateComment(scanResults, originalUrls, devLink, feedbackLink) {
 
-    let characters = 0
+    let maxSaveCharacters = 9500
 
     let completelyFailed = scanResults.failed.filter(x => x.reddit == undefined)
     let partiallyFailed = scanResults.failed.filter(x => x.reddit != undefined)
@@ -235,10 +235,17 @@ module.exports = class Bot {
 
       let odResultString = `\n${scanResult.reddit}${scanResult.missingFileSizes ? `^(File sizes are not included because the scan might take a long time. Reply \`!size\` to start a low-priority scan including file sizes (could take a few hours\))` : ``}\n`
       // split the following results into a new comment/string
-      if (commentsArray[commentsArray.length - 1].length > 9500) {
+      if (
+        (
+          commentsArray[commentsArray.length - 1].length +
+          odResultString.length + 
+          failedString.length + 
+          scanResults.successful[0].credits.length
+        ) > maxSaveCharacters) {
         commentsArray.push(odResultString)
+      } else {
+        commentsArray[commentsArray.length - 1] += odResultString
       }
-      commentsArray[commentsArray.length - 1] += odResultString
 
     };
 
@@ -374,7 +381,9 @@ ${reason ? `(Reason: ${reason})` : ``}
     await this.sleep(1000 * 10) // wait 10 seconds to (hopefully) prevent rate limiting
 
     let reply = await submissionOrComment.reply(`
-Sorry, I couldn't find any OD URLs in both the post or your comment  :/
+*Sorry, I couldn't find any OD URLs in both the post or your comment*  :/  
+
+(Google Drive URLs are not supported)
     `);
     console.log(`replied to ${submissionOrComment.id} about missing OD URLs`);
 
@@ -478,6 +487,11 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
 
       let praisingComments = comments.filter(comment => this.praises.includes(comment.body.toLowerCase()));
 
+      // filter out stale comments
+      praisingComments = praisingComments.filter(comment => {
+        return comment.created_utc * 1000 >= Date.now() - this.invocationsStaleTimeout * 1000;
+      })
+
       // console.log('praisingComments:', praisingComments);
 
       let unrepliedComments = [];
@@ -495,7 +509,7 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
       for (let comment of unrepliedComments) {
         try {
           console.log(`replying to praising comment ${comment.body} from /u/${comment.author.name}`);
-          let newComment = await comment.reply('Thanks ;)');
+          let newComment = await comment.reply(`Thanks ;)`);
           console.log(`reply sent, comment id ${newComment.id}`);
           success++;
         } catch (error) {
@@ -510,7 +524,7 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
     } catch (err) {
 
       this.running.checkInbox = false;
-      console.error(`an error occured checking the inbox: ${err}`);
+      console.error(`an error occurred checking the inbox: ${err}`);
     }
 
   }
@@ -642,7 +656,14 @@ Sorry, I couldn't find any OD URLs in both the post or your comment  :/
         });
 
       } catch (err) {
-        console.error(`Couldn't load mentions, seems like there aren't any?:`, err)
+
+        if (err.message.toLowerCase().includes(`etimedout`)) {
+          console.warn(`Timeout while fetching mentions...`)
+        } else {
+          console.error(`Couldn't load mentions, seems like there aren't any?:`, err)
+        }
+        this.running.checkForMentions = false;
+        return
       }
 
       // filter only actual comment replies which the bot didn't already comment on

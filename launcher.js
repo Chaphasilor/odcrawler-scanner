@@ -6,6 +6,7 @@ betterLogging(console, {
 })
 console.logLevel = process.env.environment !== `production` ? 4 : 3
 const Bot = require('./bot');
+const { Dashboard } = require('./dashboard');
 const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
 
 (async () => {
@@ -67,6 +68,8 @@ const { getUrl, sleep, checkDiscoveryServerReachable } = require('./util');
   } catch (err) {
     console.error(`Couldn't start the bot: ${err}`);
   }
+
+  const dash = new Dashboard(redditBot)
 
 })();
 
